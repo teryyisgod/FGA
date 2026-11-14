@@ -12,6 +12,7 @@ import io.github.fate_grand_automata.scripts.modules.PartySelection
 import io.github.fate_grand_automata.scripts.modules.Refill
 import io.github.fate_grand_automata.scripts.modules.StoryMapFinder
 import io.github.fate_grand_automata.scripts.modules.Support
+import io.github.fate_grand_automata.scripts.modules.SupportClassPicker
 import io.github.fate_grand_automata.scripts.modules.Withdraw
 import io.github.lib_automata.EntryPoint
 import io.github.lib_automata.ExitManager
@@ -52,7 +53,8 @@ class AutoStory @Inject constructor(
     private val connectionRetry: ConnectionRetry,
     private val withdraw: Withdraw,
     private val refill: Refill,
-    private val storyMapFinder: StoryMapFinder
+    private val storyMapFinder: StoryMapFinder,
+    private val supportClassPicker: SupportClassPicker
 ) : EntryPoint(exitManager), IFgoAutomataApi by api {
 
     sealed class ExitReason(val cause: Exception? = null) {
@@ -189,13 +191,28 @@ class AutoStory @Inject constructor(
                 }
 
                 StoryState.SUPPORT_SELECT -> {
-                    // Story quests pin a Guest Servant at the top of the
-                    // list; take the first entry instead of the farming
-                    // support preferences. With Preferred mode the run
-                    // stopped here whenever the configured servant was not
-                    // listed for this quest.
-                    trace("support: select first (guest)")
-                    support.selectSupport(SupportSelectionModeEnum.First)
+                    // Tap the configured class tab ourselves first: the
+                    // picker inside the selection loop fires right after
+                    // the list loads, while the tab row may still be
+                    // animating, so the tap was sometimes swallowed and
+                    // the search ran on the wrong class list.
+                    trace("support: class jump, then select")
+                    supportClassPicker.selectSupportClass()
+
+                    try {
+                        support.selectSupport()
+                    } catch (e: AutoBattle.BattleExitException) {
+                        if (e.reason != AutoBattle.ExitReason.SupportSelectionManual) {
+                            throw e
+                        }
+
+                        // The preferred support is not listed for this
+                        // quest: take the first entry (the pinned Guest
+                        // Servant on story quests) instead of stopping.
+                        trace("support: preferred not found, taking first entry")
+                        support.selectSupport(SupportSelectionModeEnum.First)
+                    }
+
                     4.seconds.wait()
                 }
 

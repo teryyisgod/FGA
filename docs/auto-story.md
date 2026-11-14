@@ -25,10 +25,15 @@ LOADING, ERROR, UNKNOWN). It reuses the existing modules: `Battle` for
 combat, `Support` for support selection, `PartySelection`, `Refill`,
 `Withdraw` and `ConnectionRetry`.
 
-The story map has no template image (its art differs per chapter), so the
-next quest is located by OCR: `StoryMapFinder` searches the map grid for
-the "NEXT" marker above the next node. If it cannot be found, the script
-stops instead of tapping blindly.
+The next quest is located by its gold "NEXT" marker: `StoryMapFinder`
+template-matches `story_next.png` on the chapter map (and
+`story_next_chapter.png` on the chapter-select list, so chapter
+boundaries are crossed by the same search), with an OCR grid search as
+fallback. Both templates were cut from real JP device screenshots
+(see `docs/reference-images/Jp/quest/`). A quest is only started after
+the open quest panel OCR-verifies as a Main Quest — panels of
+neighbouring Free Quest spots are never started. If nothing verified
+can be tapped, the script stops instead of tapping blindly.
 
 Safety: the machine only taps on recognised screens, retries unrecognised
 screens a bounded number of times, and stops on the configured conditions

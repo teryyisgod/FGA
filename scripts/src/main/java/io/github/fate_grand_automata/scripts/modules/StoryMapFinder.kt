@@ -44,12 +44,14 @@ class StoryMapFinder @Inject constructor(
         const val ZOOM_IN_STEPS = 2
 
         /**
-         * Similarity for the NEXT marker template. Measured against two JP
-         * device screenshots: 0.97 (source frame) and 0.76 (same map, marker
-         * dimmed by fog), with the best false location at 0.38 — so 0.7
-         * keeps a wide safety margin on both sides.
+         * Similarity for the NEXT marker templates. The templates are cut
+         * tightly around the letters (background fog/brightness varies too
+         * much for loose crops). Cross-measured on four JP device
+         * screenshots: every visible marker scores 0.66–1.00 with at least
+         * one template, while screens without a marker peak at 0.42 — so
+         * 0.65 sits between the two sides.
          */
-        const val NEXT_MARKER_SIMILARITY = 0.7
+        const val NEXT_MARKER_SIMILARITY = 0.65
     }
 
     /**
@@ -111,10 +113,14 @@ class StoryMapFinder @Inject constructor(
     private fun findNextMarker(): Location? {
         val area = locations.story.mapScanRegion
 
-        // Next node on the chapter map itself. The marker is rendered at
-        // two sizes: zoomed into an area (StoryNext) and in the initial
-        // whole-map view (StoryNextWide) — try both.
+        // Next node on the chapter map itself. The marker's rendering
+        // varies with zoom level and map brightness, so three tight-cut
+        // variants are tried; the tap target is the node just below the
+        // marker in every case.
         area.find(images[Images.StoryNext], NEXT_MARKER_SIMILARITY)
+            ?.let { match -> return match.region.center + locations.story.storyNodeOffset }
+
+        area.find(images[Images.StoryNextBright], NEXT_MARKER_SIMILARITY)
             ?.let { match -> return match.region.center + locations.story.storyNodeOffset }
 
         area.find(images[Images.StoryNextWide], NEXT_MARKER_SIMILARITY)

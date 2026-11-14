@@ -19,6 +19,7 @@ enum class Images(val path: String) {
     StorySkip("storyskip.png"),
     StoryNext("story_next.png"),
     StoryNextWide("story_next_wide.png"),
+    StoryNextBright("story_next_bright.png"),
     StoryNextChapter("story_next_chapter.png"),
     StoryNextPanel("story_next_panel.png"),
     Menu("menu.png"),

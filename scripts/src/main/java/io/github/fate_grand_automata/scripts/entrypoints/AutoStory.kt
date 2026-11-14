@@ -5,21 +5,27 @@ import io.github.fate_grand_automata.scripts.Images
 import io.github.fate_grand_automata.scripts.ScriptLog
 import io.github.fate_grand_automata.scripts.ScriptNotify
 import io.github.fate_grand_automata.scripts.enums.StoryState
-import io.github.fate_grand_automata.scripts.enums.SupportSelectionModeEnum
+import io.github.fate_grand_automata.scripts.enums.SupportClass
 import io.github.fate_grand_automata.scripts.modules.Battle
 import io.github.fate_grand_automata.scripts.modules.ConnectionRetry
 import io.github.fate_grand_automata.scripts.modules.PartySelection
 import io.github.fate_grand_automata.scripts.modules.Refill
 import io.github.fate_grand_automata.scripts.modules.StoryMapFinder
-import io.github.fate_grand_automata.scripts.modules.Support
-import io.github.fate_grand_automata.scripts.modules.SupportScreenRefresher
+import io.github.fate_grand_automata.scripts.modules.SupportClassPicker
+import io.github.fate_grand_automata.scripts.modules.SupportModeDecider
+import io.github.fate_grand_automata.scripts.modules.SupportScreen
 import io.github.fate_grand_automata.scripts.modules.Withdraw
 import io.github.fate_grand_automata.scripts.prefs.ISupportPreferences
+import io.github.fate_grand_automata.scripts.prefs.ISupportPreferencesCommon
+import io.github.fate_grand_automata.scripts.supportSelection.ManualSupportSelection
+import io.github.fate_grand_automata.scripts.supportSelection.SupportSelectionProvider
+import io.github.fate_grand_automata.scripts.supportSelection.SupportSelectionResult
 import io.github.lib_automata.EntryPoint
 import io.github.lib_automata.ExitManager
 import io.github.lib_automata.ScriptAbortException
 import io.github.lib_automata.dagger.ScriptScope
 import javax.inject.Inject
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -29,8 +35,9 @@ import kotlin.time.Duration.Companion.seconds
  * MAP -> QUEST_SELECT -> SUPPORT_SELECT -> PARTY_CONFIRM -> STORY -> BATTLE
  * -> RESULT -> back to MAP, reusing the existing modules for everything the
  * farming mode already does well:
- * [Battle] for combat (skills, NPs, targets, multi-wave), [Support] for
- * support selection, [PartySelection] for the configured party,
+ * [Battle] for combat (skills, NPs, targets, multi-wave), the support
+ * search providers for support selection (driven by an Auto Story loop,
+ * see selectSupportForStory), [PartySelection] for the configured party,
  * [ConnectionRetry], [Withdraw] and [Refill] for the error/AP paths.
  *
  * Safety rules (by design):
@@ -49,14 +56,16 @@ class AutoStory @Inject constructor(
     exitManager: ExitManager,
     api: IFgoAutomataApi,
     private val battle: Battle,
-    private val support: Support,
+    private val supportModeDecider: SupportModeDecider,
+    private val supportScreen: SupportScreen,
+    private val supportClassPicker: SupportClassPicker,
     private val partySelection: PartySelection,
     private val connectionRetry: ConnectionRetry,
     private val withdraw: Withdraw,
     private val refill: Refill,
     private val storyMapFinder: StoryMapFinder,
-    private val supportScreenRefresher: SupportScreenRefresher,
-    private val supportPrefs: ISupportPreferences
+    private val supportPrefs: ISupportPreferences,
+    private val commonSupportPrefs: ISupportPreferencesCommon
 ) : EntryPoint(exitManager), IFgoAutomataApi by api {
 
     sealed class ExitReason(val cause: Exception? = null) {
@@ -90,6 +99,9 @@ class AutoStory @Inject constructor(
 
         /** Similarity for the "tap to continue" announcement prompt. */
         const val NOTICE_SIMILARITY = 0.7
+
+        /** Similarity for finding a support class tab by its icon. */
+        const val SUPPORT_TAB_SIMILARITY = 0.55
     }
 
     private var completedQuests = 0
@@ -229,29 +241,7 @@ class AutoStory @Inject constructor(
                 }
 
                 StoryState.SUPPORT_SELECT -> {
-                    // Wait for the support list to finish loading and tap
-                    // the configured class tab from a settled screen (the
-                    // refresher does exactly that: wait, then pick). Tapping
-                    // the tab the moment this state was detected raced the
-                    // screen transition, so the jump was sometimes
-                    // swallowed and the search ran on the wrong class list.
-                    trace("support: waiting for list, class=${supportPrefs.supportClass}")
-                    supportScreenRefresher.waitForSupportScreenToLoad()
-                    trace("support: list loaded, class tab tapped")
-
-                    try {
-                        support.selectSupport()
-                    } catch (e: AutoBattle.BattleExitException) {
-                        if (e.reason != AutoBattle.ExitReason.SupportSelectionManual) {
-                            throw e
-                        }
-
-                        // The preferred support is not listed for this
-                        // quest: take the first entry (the pinned Guest
-                        // Servant on story quests) instead of stopping.
-                        trace("support: preferred not found, taking first entry")
-                        support.selectSupport(SupportSelectionModeEnum.First)
-                    }
+                    selectSupportForStory()
                     trace("support: selected")
 
                     4.seconds.wait()
@@ -434,6 +424,167 @@ class AutoStory @Inject constructor(
 
     private fun handleResult() {
         locations.resultClick.click(times = 5)
+    }
+
+    /**
+     * Support selection driven by Auto Story itself instead of the farming
+     * flow's selection loop. The farming loop taps the configured class tab
+     * through fixed coordinates; on wide screens those coordinates can land
+     * between two tabs, so the search silently ran on a neighbouring class
+     * (observed on device: Berserker configured, Assassin/Extra list
+     * searched). Here the class tab is found by its icon and tapped at its
+     * measured centre, and the search providers run in a picker-free loop,
+     * so nothing re-taps the tab row with fixed coordinates afterwards.
+     * The shared farming components are not modified.
+     */
+    private fun selectSupportForStory() {
+        trace("support: waiting for list, class=${supportPrefs.supportClass}")
+        waitForSupportList()
+        tapSupportClassTab(supportPrefs.supportClass)
+        trace("support: list loaded, class tab tapped")
+
+        val provider = supportModeDecider.decide(supportPrefs.selectionMode)
+        if (runSupportSelectionLoop(provider)) {
+            return
+        }
+
+        // Same fallback chain as the farming flow: the configured fallback
+        // (for story quests usually "first entry" = the pinned Guest
+        // Servant), then give up the way the farming flow does.
+        trace("support: first search failed, fallback=${supportPrefs.fallbackTo}")
+        val fallback = supportModeDecider.decide(supportPrefs.fallbackTo)
+        if (runSupportSelectionLoop(fallback)) {
+            return
+        }
+
+        ManualSupportSelection.select()
+    }
+
+    /** Waits until the support list is usable; no class picking. */
+    private fun waitForSupportList() {
+        while (true) {
+            when {
+                connectionRetry.needsToRetry() -> connectionRetry.retry()
+                supportScreen.isAnyDialogOpen() -> 1.seconds.wait()
+                supportScreen.isListLoaded() -> return
+            }
+
+            100.milliseconds.wait()
+        }
+    }
+
+    /**
+     * Taps the tab of [supportClass] at the centre of its icon, found by
+     * template matching in the tab row. Falls back to the built-in class
+     * picker when the icon cannot be found (no worse than the old flow).
+     */
+    private fun tapSupportClassTab(supportClass: SupportClass) {
+        if (supportClass == SupportClass.None) {
+            return
+        }
+
+        val match = locations.story.supportTabRowRegion
+            .find(images[supportTabImage(supportClass)], SUPPORT_TAB_SIMILARITY)
+
+        if (match != null) {
+            trace("support: tab $supportClass icon found at ${match.region.center}")
+            match.region.center.click()
+        } else {
+            trace("support: tab $supportClass icon not found, built-in picker")
+            supportClassPicker.selectSupportClass(supportClass)
+        }
+
+        0.5.seconds.wait()
+    }
+
+    private fun supportTabImage(supportClass: SupportClass) = when (supportClass) {
+        SupportClass.All -> Images.SupportTabAll
+        SupportClass.Saber -> Images.SupportTabSaber
+        SupportClass.Archer -> Images.SupportTabArcher
+        SupportClass.Lancer -> Images.SupportTabLancer
+        SupportClass.Rider -> Images.SupportTabRider
+        SupportClass.Caster -> Images.SupportTabCaster
+        SupportClass.Assassin -> Images.SupportTabAssassin
+        SupportClass.Berserker -> Images.SupportTabBerserker
+        SupportClass.Extra -> Images.SupportTabExtra
+        SupportClass.Mix -> Images.SupportTabMix
+        SupportClass.None -> Images.SupportTabAll // unreachable: None returns early
+    }
+
+    /**
+     * The farming selection loop (swipes/refreshes bounded by the common
+     * support preferences) minus its class picker: the tab was already set
+     * by [tapSupportClassTab] and is re-asserted after every list update.
+     */
+    private fun runSupportSelectionLoop(provider: SupportSelectionProvider): Boolean {
+        var numberOfSwipes = 0
+        var numberOfUpdates = 0
+        var onAllList = false
+        val alsoCheckAll = supportClassPicker.shouldAlsoCheckAll()
+
+        waitForSupportList()
+        0.5.seconds.wait()
+
+        var result: SupportSelectionResult? = null
+
+        while (true) {
+            result = if (
+                (result == null || result == SupportSelectionResult.Refresh) &&
+                supportScreen.noSupportsPresent()
+            ) {
+                SupportSelectionResult.Refresh
+            } else {
+                provider.select()
+            }
+
+            when {
+                result is SupportSelectionResult.Done -> return true
+
+                result is SupportSelectionResult.ScrollDown &&
+                    numberOfSwipes < commonSupportPrefs.swipesPerUpdate -> {
+                    supportScreen.scrollDown()
+                    ++numberOfSwipes
+                    0.3.seconds.wait()
+                }
+
+                alsoCheckAll && !onAllList -> {
+                    tapSupportClassTab(SupportClass.All)
+                    onAllList = true
+                    numberOfSwipes = 0
+                    result = null
+                }
+
+                result is SupportSelectionResult.EarlyRefresh ||
+                    numberOfUpdates < commonSupportPrefs.maxUpdates -> {
+                    refreshSupportListForStory()
+                    onAllList = false
+                    ++numberOfUpdates
+                    numberOfSwipes = 0
+                }
+
+                else -> {
+                    supportScreen.scrollToTop()
+                    return false
+                }
+            }
+        }
+    }
+
+    /**
+     * List update without the built-in class picker. The game keeps the
+     * selected class across an update; the tab is re-asserted by icon
+     * afterwards anyway. The update button greys out while it is on
+     * cooldown, so a refresh is only tapped when it is actually available.
+     */
+    private fun refreshSupportListForStory() {
+        if (supportScreen.refreshAvailable()) {
+            supportScreen.refresh()
+        } else {
+            1.seconds.wait()
+        }
+
+        waitForSupportList()
+        tapSupportClassTab(supportPrefs.supportClass)
     }
 
     private fun startQuest() {

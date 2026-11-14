@@ -4,6 +4,7 @@ import io.github.lib_automata.Location
 import io.github.lib_automata.Region
 import io.github.lib_automata.dagger.ScriptScope
 import javax.inject.Inject
+import kotlin.math.roundToInt
 
 /**
  * Coordinates used only by Auto Story mode.
@@ -55,6 +56,32 @@ class StoryLocations @Inject constructor(
      * Measured on the E Pluribus Unum reference screenshot.
      */
     val goldNodeOffset = Location(12, 163)
+
+    /**
+     * Bottom-centre strip where full-screen announcements (e.g. Mash's
+     * battle-style change) print "画面をタッチしてください". The
+     * notice_tap.png template is matched inside it.
+     */
+    val noticeTapRegion = Region(-560, -160, 1120, 130).xFromCenter().yFromBottom()
+
+    /**
+     * Centred title band of the chapter-unlock popup ("…開放！"). OCR of
+     * this band gates the popup dismissal, so the map's own chapter banner
+     * (top-right, outside this band) cannot trigger it.
+     */
+    val noticeTitleRegion = Region(-700, 30, 1400, 260).xFromCenter()
+
+    /**
+     * Close (×) button of the chapter-unlock popup, at the popup frame's
+     * top-right corner. The popup is height-fitted and centred, so the
+     * position is a fraction of the script width (measured estimate from
+     * the popup's 16:9 layout; refined once a device screenshot exists).
+     */
+    val noticeCloseClick: Location
+        get() = Location(
+            scriptArea.x + (scriptArea.width * 0.823).roundToInt(),
+            scriptArea.y + 100
+        )
 
     /**
      * Offset from the centre of the "NEXT" marker on the chapter-select

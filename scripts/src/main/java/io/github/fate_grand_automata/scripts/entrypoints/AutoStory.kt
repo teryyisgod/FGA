@@ -84,6 +84,12 @@ class AutoStory @Inject constructor(
 
         /** Quest-select passes with no verified tap target tolerated before giving up. */
         const val MAX_NO_TARGET_STREAK = 4
+
+        /** Notice dismissals attempted per unrecognised-screen streak. */
+        const val MAX_NOTICE_ATTEMPTS = 5
+
+        /** Similarity for the "tap to continue" announcement prompt. */
+        const val NOTICE_SIMILARITY = 0.7
     }
 
     private var completedQuests = 0
@@ -98,6 +104,9 @@ class AutoStory @Inject constructor(
     private var questCounted = true
 
     private var unknownStreak = 0
+
+    /** Notice dismissals attempted during the current unrecognised streak. */
+    private var noticeAttempts = 0
 
     /** Consecutive quest-select passes where nothing verified could be tapped. */
     private var noTargetStreak = 0
@@ -179,6 +188,20 @@ class AutoStory @Inject constructor(
                 throw StoryExitException(ExitReason.MaxQuestsReached(completedQuests))
             }
 
+            // Full-screen announcements (chapter-unlock popup, tap-to-
+            // continue notices) can cover the map or quest list after a
+            // clear. They only appear around unrecognised/list screens,
+            // so the (partly OCR-based) check is gated on the last state
+            // to keep battle passes responsive.
+            if (
+                (lastState == null || lastState == StoryState.UNKNOWN ||
+                    lastState == StoryState.QUEST_SELECT) &&
+                dismissNotices()
+            ) {
+                prefs.story.actionInterval.wait()
+                continue
+            }
+
             // Sub-screens that must win over the generic detectors below.
             if (handleOverlayScreens()) {
                 prefs.story.actionInterval.wait()
@@ -189,6 +212,7 @@ class AutoStory @Inject constructor(
 
             if (state != StoryState.UNKNOWN) {
                 unknownStreak = 0
+                noticeAttempts = 0
             }
 
             if (prefs.story.debugLog && state != lastState) {
@@ -303,6 +327,50 @@ class AutoStory @Inject constructor(
     // ------------------------------------------------------------------
 
     /** Returns true when an overlay screen was handled this iteration. */
+    /**
+     * Dismisses full-screen announcements that can cover the map after a
+     * quest/chapter clear. Returns true when a notice was acted on.
+     *
+     * Two kinds are handled:
+     * - "Tap to continue" announcements (e.g. Mash's battle-style change):
+     *   the prompt text is template-matched in the bottom strip and the
+     *   match is tapped (any tap dismisses these).
+     * - The chapter-unlock popup ("…開放！"): recognised by OCR of its
+     *   centred title band and dismissed via its top-right close button.
+     *
+     * Attempts are capped per unrecognised streak so a false positive can
+     * never turn into endless tapping.
+     */
+    private fun dismissNotices(): Boolean {
+        if (noticeAttempts >= MAX_NOTICE_ATTEMPTS) {
+            return false
+        }
+
+        locations.story.noticeTapRegion
+            .find(images[Images.NoticeTap], NOTICE_SIMILARITY)
+            ?.let { match ->
+                ++noticeAttempts
+                trace("notice: tap-to-continue announcement, tapping")
+                match.region.center.click()
+                1.seconds.wait()
+                return true
+            }
+
+        val title = runCatching {
+            locations.story.noticeTitleRegion.detectText(outlinedText = false)
+        }.getOrDefault("")
+
+        if (title.contains("開放")) {
+            ++noticeAttempts
+            trace("notice: unlock popup (ocr='${title.take(40)}'), tapping close")
+            locations.story.noticeCloseClick.click()
+            1.seconds.wait()
+            return true
+        }
+
+        return false
+    }
+
     private fun handleOverlayScreens(): Boolean = useSameSnapIn {
         when {
             images[Images.SupportExtra] in locations.resultFriendRequestRegion -> {

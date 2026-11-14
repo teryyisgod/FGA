@@ -50,6 +50,13 @@ class StoryLocations @Inject constructor(
     val storyNodeOffset = Location(12, 194)
 
     /**
+     * Same offset for the gold-text marker variant (story_next_gold.png):
+     * that template's cut is taller, so its centre sits closer to the node.
+     * Measured on the E Pluribus Unum reference screenshot.
+     */
+    val goldNodeOffset = Location(12, 163)
+
+    /**
      * Offset from the centre of the "NEXT" marker on the chapter-select
      * list to the centre of that chapter's entry banner (the marker sits at
      * the banner's top-right corner). Measured from the same JP reference

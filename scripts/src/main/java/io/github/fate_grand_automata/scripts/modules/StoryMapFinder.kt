@@ -177,12 +177,21 @@ class StoryMapFinder @Inject constructor(
         val area = locations.story.mapScanRegion
 
         // Next node on the chapter map itself. The marker's rendering
-        // varies with zoom level and map brightness, so three tight-cut
+        // varies with zoom level and map brightness, so tight-cut
         // variants are tried, each at a ladder of scales; the tap target
-        // is the node just below the marker in every case.
-        for (image in listOf(Images.StoryNext, Images.StoryNextBright, Images.StoryNextWide)) {
+        // is the node just below the marker in every case. The gold-text
+        // variant (e.g. E Pluribus Unum) has its own cut geometry, hence
+        // its own node offset.
+        val variants = listOf(
+            Images.StoryNext to locations.story.storyNodeOffset,
+            Images.StoryNextBright to locations.story.storyNodeOffset,
+            Images.StoryNextWide to locations.story.storyNodeOffset,
+            Images.StoryNextGold to locations.story.goldNodeOffset
+        )
+
+        for ((image, nodeOffset) in variants) {
             findScaled(area, image, MARKER_SCALES)
-                ?.let { match -> return match.region.center + locations.story.storyNodeOffset }
+                ?.let { match -> return match.region.center + nodeOffset }
         }
 
         // Next chapter on the chapter-select list (rendered larger there):
@@ -215,12 +224,55 @@ class StoryMapFinder @Inject constructor(
 
                 if (text.contains("NEXT", ignoreCase = true)) {
                     tracer?.invoke("OCR hit cell($row,$col) text='${text.take(40)}'")
-                    return cell.center
+
+                    // A grid cell is far bigger than the marker, so its
+                    // centre can be hundreds of pixels away from the node.
+                    // Bisect the cell with further OCR passes to localise
+                    // the text before tapping.
+                    val localized = localizeOcrText(cell)
+                    tracer?.invoke("OCR localized at ${localized.center}")
+                    return localized.center + locations.story.storyNodeOffset
                 }
             }
         }
 
         tracer?.invoke("OCR: no NEXT cell")
         return null
+    }
+
+    /**
+     * Narrows [region] down around the "NEXT" text by repeatedly halving
+     * it (along its longer side) and keeping the half whose OCR still
+     * contains the text. Stops when the region is small enough for its
+     * centre to anchor a tap, or when neither half matches anymore.
+     */
+    private fun localizeOcrText(region: Region): Region {
+        var current = region
+
+        while (current.width > 280 || current.height > 200) {
+            val halves = if (current.width >= current.height) {
+                val halfW = current.width / 2
+                listOf(
+                    Region(current.x, current.y, halfW, current.height),
+                    Region(current.x + halfW, current.y, current.width - halfW, current.height)
+                )
+            } else {
+                val halfH = current.height / 2
+                listOf(
+                    Region(current.x, current.y, current.width, halfH),
+                    Region(current.x, current.y + halfH, current.width, current.height - halfH)
+                )
+            }
+
+            val hit = halves.firstOrNull { half ->
+                runCatching { half.detectText(outlinedText = true) }
+                    .getOrDefault("")
+                    .contains("NEXT", ignoreCase = true)
+            } ?: return current
+
+            current = hit
+        }
+
+        return current
     }
 }

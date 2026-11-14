@@ -3,6 +3,7 @@ package io.github.fate_grand_automata.scripts.modules
 import io.github.fate_grand_automata.scripts.IFgoAutomataApi
 import io.github.fate_grand_automata.scripts.Images
 import io.github.lib_automata.Location
+import io.github.lib_automata.Pincher
 import io.github.lib_automata.Region
 import io.github.lib_automata.Swiper
 import io.github.lib_automata.dagger.ScriptScope
@@ -28,12 +29,16 @@ import kotlin.time.Duration.Companion.seconds
 @ScriptScope
 class StoryMapFinder @Inject constructor(
     api: IFgoAutomataApi,
-    private val swipe: Swiper
+    private val swipe: Swiper,
+    private val pincher: Pincher
 ) : IFgoAutomataApi by api {
 
     companion object {
         /** How many times the map may be scrolled while searching. */
         const val MAX_MAP_SCROLLS = 3
+
+        /** Pinch-out gestures used to reach the whole-map zoom level. */
+        const val ZOOM_OUT_PINCHES = 2
 
         /**
          * Similarity for the NEXT marker template. Measured against two JP
@@ -46,9 +51,39 @@ class StoryMapFinder @Inject constructor(
 
     /**
      * Returns the tap location of the next quest node, or null when it could
-     * not be located within [MAX_MAP_SCROLLS] scrolls.
+     * not be located.
+     *
+     * The marker renders at different sizes per zoom level, so the search
+     * runs in phases: the current view first, then after pinching fully out
+     * (the whole-map view, where every node is visible at once), and finally
+     * after pinching back in once. Each phase also scrolls the map a few
+     * times before giving up.
      */
     fun findNextQuest(): Location? {
+        searchCurrentView()?.let { return it }
+
+        // Zoom fully out and search the whole map.
+        repeat(ZOOM_OUT_PINCHES) {
+            pincher(
+                locations.story.pinchCenter,
+                locations.story.pinchStartDistance,
+                locations.story.pinchEndDistance
+            )
+            1.seconds.wait()
+        }
+        searchCurrentView()?.let { return it }
+
+        // Zoom back in once, in case this chapter only opens zoomed in.
+        pincher(
+            locations.story.pinchCenter,
+            locations.story.pinchEndDistance,
+            locations.story.pinchStartDistance
+        )
+        1.seconds.wait()
+        return searchCurrentView()
+    }
+
+    private fun searchCurrentView(): Location? {
         repeat(MAX_MAP_SCROLLS + 1) { attempt ->
             findNextMarker()?.let { return it }
 

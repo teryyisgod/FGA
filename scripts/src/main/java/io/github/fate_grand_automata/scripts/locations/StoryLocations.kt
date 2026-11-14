@@ -63,6 +63,15 @@ class StoryLocations @Inject constructor(
     val mapScrollStart = Location(0, 1050).xFromCenter()
     val mapScrollEnd = Location(0, 450).xFromCenter()
 
+    /** Centre of the pinch gestures used to change the story map's zoom level. */
+    val pinchCenter = Location(0, 700).xFromCenter()
+
+    /** Finger gap (script px) at the start of a pinch: wide open. */
+    val pinchStartDistance = 760
+
+    /** Finger gap (script px) at the end of a zoom-out pinch: nearly closed. */
+    val pinchEndDistance = 140
+
     /** Tap target for advancing dialogue when story skip is disabled. */
     val dialogueAdvanceClick = Location(0, -120).xFromCenter().yFromBottom()
 

@@ -34,6 +34,10 @@ abstract class LibAutomataModule {
 
     @ScriptScope
     @Binds
+    abstract fun pincher(pincher: RealPincher): Pincher
+
+    @ScriptScope
+    @Binds
     abstract fun scale(scale: RealScale): Scale
 
     @ScriptScope

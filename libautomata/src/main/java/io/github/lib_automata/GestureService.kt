@@ -19,4 +19,10 @@ interface GestureService : AutoCloseable {
      * @param times the number of times to click
      */
     fun click(location: Location, times: Int = 1)
+
+    /**
+     * Moves two fingers simultaneously: finger A from [startA] to [endA]
+     * and finger B from [startB] to [endB]. Used for pinch zoom gestures.
+     */
+    fun pinch(startA: Location, endA: Location, startB: Location, endB: Location)
 }

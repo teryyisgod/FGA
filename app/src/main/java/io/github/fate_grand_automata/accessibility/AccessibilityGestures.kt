@@ -144,9 +144,30 @@ class AccessibilityGestures @Inject constructor(
         wait(gesturePrefs.clickWaitTime)
     }
 
-    private suspend fun performGesture(StrokeDesc: GestureDescription.StrokeDescription): Boolean = suspendCancellableCoroutine {
+    override fun pinch(startA: Location, endA: Location, startB: Location, endB: Location) = runBlocking {
+        Timber.d("pinch $startA->$endA $startB->$endB")
+
+        val duration = 450L
+
+        val strokeA = GestureDescription.StrokeDescription(
+            Path().moveTo(startA).lineTo(endA),
+            0,
+            duration
+        )
+        val strokeB = GestureDescription.StrokeDescription(
+            Path().moveTo(startB).lineTo(endB),
+            0,
+            duration
+        )
+
+        performGesture(strokeA, strokeB)
+
+        wait(gesturePrefs.clickWaitTime)
+    }
+
+    private suspend fun performGesture(vararg strokes: GestureDescription.StrokeDescription): Boolean = suspendCancellableCoroutine {
         val gestureDesc = GestureDescription.Builder()
-            .addStroke(StrokeDesc)
+            .apply { strokes.forEach { addStroke(it) } }
             .build()
 
         val callback = object : AccessibilityService.GestureResultCallback() {

@@ -5,6 +5,7 @@ import io.github.fate_grand_automata.scripts.Images
 import io.github.fate_grand_automata.scripts.ScriptLog
 import io.github.fate_grand_automata.scripts.ScriptNotify
 import io.github.fate_grand_automata.scripts.enums.StoryState
+import io.github.fate_grand_automata.scripts.enums.SupportSelectionModeEnum
 import io.github.fate_grand_automata.scripts.modules.Battle
 import io.github.fate_grand_automata.scripts.modules.ConnectionRetry
 import io.github.fate_grand_automata.scripts.modules.PartySelection
@@ -188,7 +189,13 @@ class AutoStory @Inject constructor(
                 }
 
                 StoryState.SUPPORT_SELECT -> {
-                    support.selectSupport()
+                    // Story quests pin a Guest Servant at the top of the
+                    // list; take the first entry instead of the farming
+                    // support preferences. With Preferred mode the run
+                    // stopped here whenever the configured servant was not
+                    // listed for this quest.
+                    trace("support: select first (guest)")
+                    support.selectSupport(SupportSelectionModeEnum.First)
                     4.seconds.wait()
                 }
 

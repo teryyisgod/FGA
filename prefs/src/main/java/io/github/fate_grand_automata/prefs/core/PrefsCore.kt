@@ -36,6 +36,17 @@ class PrefsCore @Inject constructor(
     val storySkip = maker.bool("story_skip")
     val withdrawEnabled = maker.bool("withdraw_enabled")
 
+    // Auto Story mode (independent from the farming settings above)
+    val autoStoryEnabled = maker.bool("auto_story_enabled")
+    val autoStoryAutoSkip = maker.bool("auto_story_auto_skip", true)
+    val autoStoryAutoSelectQuest = maker.bool("auto_story_auto_select_quest", true)
+    val autoStoryMaxQuests = maker.int("auto_story_max_quests", 20)
+    val autoStoryStopOnApOut = maker.bool("auto_story_stop_on_ap_out", true)
+    val autoStoryStopOnDefeat = maker.bool("auto_story_stop_on_defeat", true)
+    val autoStoryStopOnError = maker.bool("auto_story_stop_on_error", true)
+    val autoStoryActionIntervalMs = maker.int("auto_story_action_interval_ms", 500)
+    val autoStoryDebugLog = maker.bool("auto_story_debug_log")
+
     val stopOnCEGet = maker.bool("stop_on_ce_get")
     val stopOnFirstClearRewards = maker.bool("stop_on_first_clear_rewards")
 

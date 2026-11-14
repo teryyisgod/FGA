@@ -50,6 +50,8 @@ interface IPreferences {
 
     val servant: IServantEnhancementPreferences
 
+    val story: IAutoStoryPreferences
+
     fun getPerServerConfigPref(server: GameServer): IPerServerConfigPrefs
 
     fun addPerServerConfigPref(server: GameServer): IPerServerConfigPrefs

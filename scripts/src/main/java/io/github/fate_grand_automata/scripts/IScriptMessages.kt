@@ -14,6 +14,7 @@ sealed class ScriptNotify {
     class SupportListUpdatingIn(val time: Duration) : ScriptNotify()
     class BetweenRuns(val refills: Int, val runs: Int, val ceDrops: Int) : ScriptNotify()
     data object BondLevelUp : ScriptNotify()
+    class StoryQuestCompleted(val completed: Int, val maxQuests: Int) : ScriptNotify()
 }
 
 sealed class ScriptLog {
@@ -39,6 +40,11 @@ sealed class ScriptLog {
         val cards: Iterable<CommandCard.Face>,
         val servant: TeamSlot,
         val isSupport: Boolean = false
+    ) : ScriptLog()
+
+    class AutoStoryState(
+        val state: String,
+        val completedQuests: Int
     ) : ScriptLog()
 }
 

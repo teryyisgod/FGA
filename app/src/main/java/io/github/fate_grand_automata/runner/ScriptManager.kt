@@ -16,6 +16,7 @@ import io.github.fate_grand_automata.di.script.ScriptEntryPoint
 import io.github.fate_grand_automata.di.service.ServiceCoroutineScope
 import io.github.fate_grand_automata.prefs.core.PrefsCore
 import io.github.fate_grand_automata.scripts.entrypoints.AutoBattle
+import io.github.fate_grand_automata.scripts.entrypoints.AutoStory
 import io.github.fate_grand_automata.scripts.entrypoints.AutoCEBomb
 import io.github.fate_grand_automata.scripts.entrypoints.AutoFriendGacha
 import io.github.fate_grand_automata.scripts.entrypoints.AutoGiftBox
@@ -207,6 +208,45 @@ class ScriptManager @Inject constructor(
                 messageBox.show(scriptExitedString, msg)
             }
 
+            is AutoStory.ExitException -> {
+                preferences.hidePlayButton = false
+
+                val msg = when (val reason = e.reason) {
+                    AutoStory.ExitReason.Abort ->
+                        context.getString(R.string.auto_story_aborted)
+
+                    is AutoStory.ExitReason.MaxQuestsReached ->
+                        context.getString(R.string.auto_story_max_quests_reached, reason.completed)
+
+                    AutoStory.ExitReason.APRanOut ->
+                        context.getString(R.string.auto_story_ap_ran_out)
+
+                    AutoStory.ExitReason.Defeated ->
+                        context.getString(R.string.auto_story_defeated)
+
+                    AutoStory.ExitReason.NextQuestNotFound ->
+                        context.getString(R.string.auto_story_next_quest_not_found)
+
+                    AutoStory.ExitReason.UnknownScreen ->
+                        context.getString(R.string.auto_story_unknown_screen)
+
+                    AutoStory.ExitReason.InventoryFull ->
+                        context.getString(R.string.inventory_full)
+
+                    AutoStory.ExitReason.SupportSelectionManual ->
+                        context.getString(R.string.auto_story_support_manual)
+
+                    is AutoStory.ExitReason.Unexpected ->
+                        "${context.getString(R.string.unexpected_error)}: ${reason.cause?.message}"
+                }
+
+                if (e.reason !is AutoStory.ExitReason.Abort) {
+                    messages.notify(scriptExitedString)
+                }
+
+                messageBox.show(scriptExitedString, msg)
+            }
+
             is AutoBattle.ExitException -> {
                 preferences.hidePlayButton = false
 
@@ -284,6 +324,7 @@ class ScriptManager @Inject constructor(
     private fun getEntryPoint(entryPoint: ScriptEntryPoint): EntryPoint =
         when (preferences.scriptMode) {
             ScriptModeEnum.Battle -> entryPoint.battle()
+            ScriptModeEnum.Story -> entryPoint.story()
             ScriptModeEnum.FP -> entryPoint.fp()
             ScriptModeEnum.Lottery -> entryPoint.lottery()
             ScriptModeEnum.PresentBox -> entryPoint.giftBox()
@@ -416,7 +457,16 @@ class ScriptManager @Inject constructor(
                 return@launch
             }
 
-            val resp = scriptPicker(context, detectedMode)
+            // Auto Story shares its start screens (quest list / story map)
+            // with Battle mode, so screen detection cannot tell them apart.
+            // The explicit Auto Story ON/OFF setting in More Options is the
+            // switch: when it is on, a Battle detection becomes Story.
+            val effectiveMode =
+                if (detectedMode == ScriptModeEnum.Battle && prefsCore.autoStoryEnabled.get()) {
+                    ScriptModeEnum.Story
+                } else detectedMode
+
+            val resp = scriptPicker(context, effectiveMode)
 
             uiStateHolder.isPlayButtonEnabled = true
             launcherResponseHandler.handle(resp)

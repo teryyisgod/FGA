@@ -35,6 +35,9 @@ fun ScriptLauncher(
                 ScriptModeEnum.Battle, ScriptModeEnum.SupportImageMaker ->
                     battleLauncher(prefs, modifier)
 
+                ScriptModeEnum.Story ->
+                    battleLauncher(prefs, modifier) { ScriptLauncherResponse.Story }
+
                 ScriptModeEnum.FP -> fpLauncher(prefs, modifier)
                 ScriptModeEnum.Lottery -> lotteryLauncher(prefs, modifier)
                 ScriptModeEnum.PresentBox -> giftBoxLauncher(prefs, modifier)

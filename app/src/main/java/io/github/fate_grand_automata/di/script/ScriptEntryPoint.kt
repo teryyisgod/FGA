@@ -9,6 +9,7 @@ import io.github.lib_automata.OcrService
 @InstallIn(ScriptComponent::class)
 interface ScriptEntryPoint {
     fun battle(): AutoBattle
+    fun story(): AutoStory
     fun fp(): AutoFriendGacha
     fun giftBox(): AutoGiftBox
     fun lottery(): AutoLottery

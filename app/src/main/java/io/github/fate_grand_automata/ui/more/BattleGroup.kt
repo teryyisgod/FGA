@@ -14,6 +14,7 @@ import io.github.fate_grand_automata.scripts.enums.GameServers
 import io.github.fate_grand_automata.ui.icon
 import io.github.fate_grand_automata.ui.prefs.ListPreference
 import io.github.fate_grand_automata.ui.prefs.SingleSelectChipPreference
+import io.github.fate_grand_automata.ui.prefs.StepperPreference
 import io.github.fate_grand_automata.ui.prefs.SwitchPreference
 import io.github.fate_grand_automata.util.stringRes
 
@@ -116,6 +117,65 @@ fun LazyListScope.battleGroup(
             title = stringResource(R.string.p_treat_support_like_own_servant),
             summary = stringResource(R.string.p_treat_support_like_own_servant_summary),
             icon = icon(R.drawable.ic_biceps)
+        )
+    }
+
+    // ---- Auto Story ----
+    item {
+        prefs.autoStoryEnabled.SwitchPreference(
+            title = stringResource(R.string.p_auto_story_enabled),
+            summary = stringResource(R.string.p_auto_story_enabled_summary),
+            icon = icon(Icons.Default.FastForward)
+        )
+    }
+
+    item {
+        prefs.autoStoryAutoSkip.SwitchPreference(
+            title = stringResource(R.string.p_auto_story_auto_skip)
+        )
+    }
+
+    item {
+        prefs.autoStoryAutoSelectQuest.SwitchPreference(
+            title = stringResource(R.string.p_auto_story_auto_select_quest)
+        )
+    }
+
+    item {
+        prefs.autoStoryMaxQuests.StepperPreference(
+            title = stringResource(R.string.p_auto_story_max_quests),
+            valueRange = 1..999
+        )
+    }
+
+    item {
+        prefs.autoStoryStopOnApOut.SwitchPreference(
+            title = stringResource(R.string.p_auto_story_stop_on_ap_out)
+        )
+    }
+
+    item {
+        prefs.autoStoryStopOnDefeat.SwitchPreference(
+            title = stringResource(R.string.p_auto_story_stop_on_defeat)
+        )
+    }
+
+    item {
+        prefs.autoStoryStopOnError.SwitchPreference(
+            title = stringResource(R.string.p_auto_story_stop_on_error)
+        )
+    }
+
+    item {
+        prefs.autoStoryActionIntervalMs.StepperPreference(
+            title = stringResource(R.string.p_auto_story_action_interval),
+            valueRange = 100..3000
+        )
+    }
+
+    item {
+        prefs.autoStoryDebugLog.SwitchPreference(
+            title = stringResource(R.string.p_auto_story_debug_log)
         )
     }
 }

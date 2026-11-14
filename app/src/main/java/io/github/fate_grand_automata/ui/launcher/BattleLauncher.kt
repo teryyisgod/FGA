@@ -50,7 +50,8 @@ import io.github.fate_grand_automata.util.stringRes
 @Composable
 fun battleLauncher(
     prefs: IPreferences,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    buildResponse: () -> ScriptLauncherResponse = { ScriptLauncherResponse.Battle }
 ): ScriptLauncherResponseBuilder {
     val configs = remember {
         prefs.battleConfigs
@@ -382,9 +383,7 @@ fun battleLauncher(
 
     return ScriptLauncherResponseBuilder(
         canBuild = { selectedConfigIndex != -1 },
-        build = {
-            ScriptLauncherResponse.Battle
-        }
+        build = { buildResponse() }
     )
 }
 

@@ -97,6 +97,10 @@ class ScriptMessages @Inject constructor(
                 val supportText = if (item.isSupport) "Support " else ""
                 Timber.d("${item.cards} belong to ${supportText}${item.servant}")
             }
+
+            is ScriptLog.AutoStoryState -> {
+                Timber.d("AutoStory: state=${item.state}, completed=${item.completedQuests}")
+            }
         }
 
     override fun notify(action: ScriptNotify) =
@@ -141,6 +145,16 @@ class ScriptMessages @Inject constructor(
             is ScriptNotify.BondLevelUp -> {
                 notify(
                     context.getString(R.string.bond_level_up)
+                )
+            }
+
+            is ScriptNotify.StoryQuestCompleted -> {
+                toast(
+                    context.getString(
+                        R.string.auto_story_quest_completed,
+                        action.completed,
+                        action.maxQuests
+                    )
                 )
             }
         }

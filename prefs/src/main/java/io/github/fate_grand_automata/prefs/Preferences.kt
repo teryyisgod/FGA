@@ -5,6 +5,7 @@ import io.github.fate_grand_automata.prefs.core.PrefsCore
 import io.github.fate_grand_automata.prefs.core.map
 import io.github.fate_grand_automata.scripts.enums.GameServer
 import io.github.fate_grand_automata.scripts.enums.GameServers
+import io.github.fate_grand_automata.scripts.prefs.IAutoStoryPreferences
 import io.github.fate_grand_automata.scripts.prefs.IBattleConfig
 import io.github.fate_grand_automata.scripts.prefs.IGesturesPreferences
 import io.github.fate_grand_automata.scripts.prefs.IPerServerConfigPrefs
@@ -121,6 +122,9 @@ class PreferencesImpl @Inject constructor(
 
     override val servant: IServantEnhancementPreferences =
         ServantEnhancementPrefs(prefs.servantEnhancement)
+
+    override val story: IAutoStoryPreferences =
+        AutoStoryPrefs(prefs)
 
     override fun forBattleConfig(id: String): IBattleConfig =
         autoSkillMap.getOrPut(id) {

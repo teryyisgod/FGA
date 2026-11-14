@@ -58,15 +58,6 @@ class StoryLocations @Inject constructor(
     val goldNodeOffset = Location(12, 163)
 
     /**
-     * Band covering the support class tab row. Auto Story finds the
-     * configured class tab by its icon inside this band instead of
-     * trusting fixed coordinates: on wide screens the built-in tab
-     * positions can land between two tabs.
-     */
-    val supportTabRowRegion: Region
-        get() = Region(scriptArea.x + 100, scriptArea.y + 185, 2050, 150)
-
-    /**
      * Bottom-centre strip where full-screen announcements (e.g. Mash's
      * battle-style change) print "画面をタッチしてください". The
      * notice_tap.png template is matched inside it.

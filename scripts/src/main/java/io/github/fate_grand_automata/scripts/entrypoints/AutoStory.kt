@@ -89,14 +89,14 @@ class AutoStory @Inject constructor(
         const val MAX_NOTICE_ATTEMPTS = 5
 
         /**
-         * Consecutive unrecognised screens tolerated while a battle is in
-         * progress. Battle animations, NP movies, wave transitions and the
-         * victory sequence hide the battle UI for seconds at a time, so an
-         * unrecognised screen mid-battle means "wait", not "search the
-         * map". Each pass also spends time in screen detection, so this
-         * covers several minutes of hidden UI.
+         * Consecutive unrecognised screens tolerated while a quest is in
+         * progress. Battle intros, attack/NP animations, wave transitions
+         * and the victory sequence hide every recognisable UI for seconds
+         * at a time, so an unrecognised screen mid-quest means "wait",
+         * not "search the map". Each pass also spends time in screen
+         * detection, so this covers several minutes of hidden UI.
          */
-        const val MAX_BATTLE_UNKNOWN_STREAK = 120
+        const val MAX_IN_QUEST_UNKNOWN_STREAK = 120
 
         /** Similarity for the "tap to continue" announcement prompt. */
         const val NOTICE_SIMILARITY = 0.7
@@ -115,11 +115,8 @@ class AutoStory @Inject constructor(
 
     private var unknownStreak = 0
 
-    /** A battle started for the current quest and its result is not done yet. */
-    private var inBattleSequence = false
-
-    /** Consecutive unrecognised screens seen during the current battle. */
-    private var battleUnknownStreak = 0
+    /** Consecutive unrecognised screens seen during the current quest. */
+    private var inQuestUnknownStreak = 0
 
     /** Notice dismissals attempted during the current unrecognised streak. */
     private var noticeAttempts = 0
@@ -228,7 +225,7 @@ class AutoStory @Inject constructor(
 
             if (state != StoryState.UNKNOWN) {
                 unknownStreak = 0
-                battleUnknownStreak = 0
+                inQuestUnknownStreak = 0
                 noticeAttempts = 0
             }
 
@@ -242,7 +239,6 @@ class AutoStory @Inject constructor(
                 StoryState.ERROR -> handleError()
                 StoryState.BATTLE -> {
                     questProgressed = true
-                    inBattleSequence = true
                     battle.performBattle()
                 }
 
@@ -285,33 +281,30 @@ class AutoStory @Inject constructor(
                     questProgressed = true
                     countCompletionIfNeeded()
                     handleResult()
-                    inBattleSequence = false
                 }
 
-                StoryState.QUEST_SELECT -> {
-                    inBattleSequence = false
-                    selectQuest()
-                }
+                StoryState.QUEST_SELECT -> selectQuest()
 
                 StoryState.MAP,
                 StoryState.LOADING -> {
                     // Transitional: wait for the next recognisable screen.
-                    inBattleSequence = false
                     1.seconds.wait()
                 }
 
                 StoryState.UNKNOWN -> {
-                    if (inBattleSequence && battleUnknownStreak < MAX_BATTLE_UNKNOWN_STREAK) {
-                        // Mid-battle the UI regularly disappears (attack
-                        // and NP animations, wave transitions, the victory
-                        // sequence). Wait for it to come back instead of
-                        // searching the map and burning the unknown-screen
-                        // limit — that used to stop the run mid-battle
-                        // (observed on device: stopped on turn 3 while
-                        // the battle sat idle behind the exit dialog).
-                        ++battleUnknownStreak
-                        if (battleUnknownStreak == 1 || battleUnknownStreak % 15 == 0) {
-                            trace("battle: UI hidden, waiting (streak=$battleUnknownStreak)")
+                    if (questActive && inQuestUnknownStreak < MAX_IN_QUEST_UNKNOWN_STREAK) {
+                        // A quest is in progress, so an unrecognised
+                        // screen is a transition: battle intro, attack/NP
+                        // animation, wave change, victory sequence, story
+                        // dialogue. Wait for a recognisable screen instead
+                        // of searching the map and burning the unknown
+                        // limit — gating this on "battle seen once" was
+                        // not enough: the run died in the intro window
+                        // before the battle UI ever settled (observed on
+                        // device: exit dialog over a turn-1 battle).
+                        ++inQuestUnknownStreak
+                        if (inQuestUnknownStreak == 1 || inQuestUnknownStreak % 15 == 0) {
+                            trace("quest: screen unrecognised, waiting (streak=$inQuestUnknownStreak)")
                         }
                         1.seconds.wait()
                     } else {

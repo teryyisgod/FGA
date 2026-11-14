@@ -12,8 +12,9 @@ import io.github.fate_grand_automata.scripts.modules.PartySelection
 import io.github.fate_grand_automata.scripts.modules.Refill
 import io.github.fate_grand_automata.scripts.modules.StoryMapFinder
 import io.github.fate_grand_automata.scripts.modules.Support
-import io.github.fate_grand_automata.scripts.modules.SupportClassPicker
+import io.github.fate_grand_automata.scripts.modules.SupportScreenRefresher
 import io.github.fate_grand_automata.scripts.modules.Withdraw
+import io.github.fate_grand_automata.scripts.prefs.ISupportPreferences
 import io.github.lib_automata.EntryPoint
 import io.github.lib_automata.ExitManager
 import io.github.lib_automata.ScriptAbortException
@@ -54,7 +55,8 @@ class AutoStory @Inject constructor(
     private val withdraw: Withdraw,
     private val refill: Refill,
     private val storyMapFinder: StoryMapFinder,
-    private val supportClassPicker: SupportClassPicker
+    private val supportScreenRefresher: SupportScreenRefresher,
+    private val supportPrefs: ISupportPreferences
 ) : EntryPoint(exitManager), IFgoAutomataApi by api {
 
     sealed class ExitReason(val cause: Exception? = null) {
@@ -120,10 +122,12 @@ class AutoStory @Inject constructor(
     }
 
     private fun withTrail(reason: ExitReason): ExitException =
-        if (prefs.story.debugLog && trail.isNotEmpty() && reason !is ExitReason.Unexpected) {
+        if (prefs.story.debugLog && reason !is ExitReason.Unexpected) {
+            // Keep the original exit reason readable in the dialog: the
+            // trail alone cannot distinguish a user abort from a failure.
             ExitException(
                 ExitReason.Unexpected(
-                    IllegalStateException("DEBUG TRAIL:\n$trail")
+                    IllegalStateException("exit=${reason.javaClass.simpleName}\nDEBUG TRAIL:\n$trail")
                 )
             )
         } else {
@@ -151,7 +155,17 @@ class AutoStory @Inject constructor(
         } catch (_: ScriptAbortException) {
             throw withTrail(ExitReason.Abort)
         } catch (e: Exception) {
-            throw ExitException(ExitReason.Unexpected(e))
+            throw ExitException(
+                if (prefs.story.debugLog) {
+                    ExitReason.Unexpected(
+                        IllegalStateException(
+                            "error=${e.javaClass.simpleName}: ${e.message}\nDEBUG TRAIL:\n$trail"
+                        )
+                    )
+                } else {
+                    ExitReason.Unexpected(e)
+                }
+            )
         }
     }
 
@@ -191,13 +205,15 @@ class AutoStory @Inject constructor(
                 }
 
                 StoryState.SUPPORT_SELECT -> {
-                    // Tap the configured class tab ourselves first: the
-                    // picker inside the selection loop fires right after
-                    // the list loads, while the tab row may still be
-                    // animating, so the tap was sometimes swallowed and
-                    // the search ran on the wrong class list.
-                    trace("support: class jump, then select")
-                    supportClassPicker.selectSupportClass()
+                    // Wait for the support list to finish loading and tap
+                    // the configured class tab from a settled screen (the
+                    // refresher does exactly that: wait, then pick). Tapping
+                    // the tab the moment this state was detected raced the
+                    // screen transition, so the jump was sometimes
+                    // swallowed and the search ran on the wrong class list.
+                    trace("support: waiting for list, class=${supportPrefs.supportClass}")
+                    supportScreenRefresher.waitForSupportScreenToLoad()
+                    trace("support: list loaded, class tab tapped")
 
                     try {
                         support.selectSupport()
@@ -212,6 +228,7 @@ class AutoStory @Inject constructor(
                         trace("support: preferred not found, taking first entry")
                         support.selectSupport(SupportSelectionModeEnum.First)
                     }
+                    trace("support: selected")
 
                     4.seconds.wait()
                 }

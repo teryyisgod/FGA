@@ -374,11 +374,24 @@ class AutoStory @Inject constructor(
     }
 
     /**
-     * Whether the open quest panel offers a Main Quest. The panel banners
-     * read "Main Quest" / "Free Quest" / "Interlude", so an OCR pass over
-     * the panel region tells them apart reliably.
+     * Whether the open quest panel offers the next Main Quest.
+     *
+     * Primary check: the gold NEXT banner the panel draws on the Main
+     * Quest entry ([Images.StoryNextPanel], cut from a device screenshot;
+     * Free Quest / Interlude entries never carry it). OCR of the banner
+     * labels ("Main Quest") is kept as a fallback. An OCR-only check
+     * proved unreliable on device: when it missed, the finder kept
+     * re-tapping the already-selected node and the run never proceeded.
      */
     private fun isMainQuestPanelOpen(): Boolean {
+        if (locations.story.questPanelRegion.exists(
+                images[Images.StoryNextPanel],
+                similarity = StoryMapFinder.NEXT_MARKER_SIMILARITY
+            )
+        ) {
+            return true
+        }
+
         val text = runCatching { locations.story.questPanelRegion.detectText() }
             .getOrDefault("")
 

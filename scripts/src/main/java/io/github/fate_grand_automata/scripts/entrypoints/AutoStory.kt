@@ -299,9 +299,17 @@ class AutoStory @Inject constructor(
         else -> StoryState.UNKNOWN
     }
 
-    /** Party confirmation shows the "Start Quest" button (start_quest.png). */
+    /**
+     * Party confirmation shows the "Start Quest" button. The built-in
+     * start_quest.png template does not match this button's rendering on
+     * the party screen (measured 0.33 on a device screenshot, so this
+     * state was never detected), hence Auto Story's own template of the
+     * actual button (0.98 on the same screenshot, <=0.32 elsewhere).
+     */
     private fun isInPartyConfirm() =
-        images[Images.StartQuest] in locations.story.startQuestRegion
+        locations.story.startQuestRegion
+            .find(images[Images.StoryStartQuest], similarity = 0.6) != null ||
+            images[Images.StartQuest] in locations.story.startQuestRegion
 
     /** The quest list is the same screen AutoBattle's menu() handles. */
     private fun isInQuestList() = images[Images.Menu] in locations.menuScreenRegion
@@ -439,6 +447,7 @@ class AutoStory @Inject constructor(
     private fun startQuest() {
         partySelection.selectParty()
 
+        trace("party: tapping start quest")
         locations.menuStartQuestClick.click()
 
         2.seconds.wait()

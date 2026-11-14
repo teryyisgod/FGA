@@ -20,10 +20,14 @@ class StoryLocations @Inject constructor(
 
     /**
      * Region where the "Start Quest" button of the party-confirmation screen
-     * is expected (bottom-right). [io.github.fate_grand_automata.scripts.Images.StartQuest]
-     * is matched inside it.
+     * is expected (bottom-right). Sized to contain the whole button: an
+     * earlier, shorter region cut off the button's bottom edge, which
+     * depressed the match score. Auto Story's own button template
+     * ([io.github.fate_grand_automata.scripts.Images.StoryStartQuest]) is
+     * matched inside it; the built-in StartQuest template does not match
+     * this button's rendering (measured 0.33 on a device screenshot).
      */
-    val startQuestRegion = Region(-760, -380, 700, 320).xFromRight().yFromBottom()
+    val startQuestRegion = Region(-780, -450, 720, 400).xFromRight().yFromBottom()
 
     /**
      * Full story-map area scanned for the "NEXT" marker of the next quest

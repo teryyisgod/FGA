@@ -37,6 +37,28 @@ class StoryLocations @Inject constructor(
     val mapGridCols = 4
     val mapGridRows = 3
 
+    /**
+     * Offset from the centre of the floating "NEXT" marker to the centre of
+     * the quest node icon below it (measured from JP reference screenshots in
+     * docs/reference-images/Jp/quest/).
+     */
+    val storyNodeOffset = Location(12, 194)
+
+    /**
+     * Offset from the centre of the "NEXT" marker on the chapter-select
+     * list to the centre of that chapter's entry banner (the marker sits at
+     * the banner's top-right corner). Measured from the same JP reference
+     * screenshots.
+     */
+    val chapterNodeOffset = Location(-344, 146)
+
+    /**
+     * Right-side panel listing the quests of the selected map spot. OCR of
+     * this region tells apart a Main Quest panel (contains "Main") from
+     * Free Quest / Interlude panels, which must never be auto-started.
+     */
+    val questPanelRegion = Region(-1750, 130, 1650, 650).xFromRight()
+
     /** Swipe used to scroll the story map when no "NEXT" marker is visible. */
     val mapScrollStart = Location(0, 1050).xFromCenter()
     val mapScrollEnd = Location(0, 450).xFromCenter()

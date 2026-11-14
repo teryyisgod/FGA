@@ -76,6 +76,9 @@ class AutoStory @Inject constructor(
 
         /** OCR map search runs at most once per this many UNKNOWN detections (it is slow). */
         const val MAP_SEARCH_EVERY = 2
+
+        /** Quest-select passes with no verified tap target tolerated before giving up. */
+        const val MAX_NO_TARGET_STREAK = 4
     }
 
     private var completedQuests = 0
@@ -90,6 +93,10 @@ class AutoStory @Inject constructor(
     private var questCounted = true
 
     private var unknownStreak = 0
+
+    /** Consecutive quest-select passes where nothing verified could be tapped. */
+    private var noTargetStreak = 0
+
     private var lastState: StoryState? = null
 
     override fun script(): Nothing {
@@ -324,25 +331,68 @@ class AutoStory @Inject constructor(
 
         battleResetIgnoringFarmingLimits()
 
-        // Click the uppermost quest, exactly like AutoBattle.menu().
-        locations.menuSelectQuestClick.click()
+        // A quest panel is already open for some map spot: start it only
+        // when it offers a Main Quest. Free Quest / Interlude panels belong
+        // to neighbouring spots and must never be auto-started.
+        if (isMainQuestPanelOpen()) {
+            // Click the uppermost quest, exactly like AutoBattle.menu().
+            // The Main Quest banner (with the NEXT marker) is listed first.
+            locations.menuSelectQuestClick.click()
 
-        questActive = true
-        questProgressed = false
-        questCounted = false
+            questActive = true
+            questProgressed = false
+            questCounted = false
+            noTargetStreak = 0
 
-        2.5.seconds.wait()
+            2.5.seconds.wait()
 
-        if (isInventoryFull()) {
-            throw StoryExitException(ExitReason.InventoryFull)
+            if (isInventoryFull()) {
+                throw StoryExitException(ExitReason.InventoryFull)
+            }
+
+            return
         }
+
+        // No usable panel: tap the node carrying the NEXT marker. Its panel
+        // opens and is verified on the next pass. Tapping the verified node
+        // also replaces a wrong (Free Quest) panel that may be open.
+        val next = storyMapFinder.findNextQuest()
+        if (next != null) {
+            next.click()
+            noTargetStreak = 0
+            2.seconds.wait()
+            return
+        }
+
+        // Nothing verified to tap. Never tap blindly here — a fixed-position
+        // tap on this screen used to start neighbouring Free Quests.
+        if (++noTargetStreak >= MAX_NO_TARGET_STREAK) {
+            throw StoryExitException(ExitReason.NextQuestNotFound)
+        }
+
+        2.seconds.wait()
     }
 
     /**
-     * The story map is not matched by any template (its art differs per
-     * chapter), so an UNKNOWN screen is first given a chance to be the map:
-     * [StoryMapFinder] OCR-searches for the "NEXT" node marker. Only when
-     * that also fails repeatedly do we treat the screen as an error.
+     * Whether the open quest panel offers a Main Quest. The panel banners
+     * read "Main Quest" / "Free Quest" / "Interlude", so an OCR pass over
+     * the panel region tells them apart reliably.
+     */
+    private fun isMainQuestPanelOpen(): Boolean {
+        val text = runCatching { locations.story.questPanelRegion.detectText() }
+            .getOrDefault("")
+
+        // Both words are required: the chapter-select header reads
+        // "Main Record", which must not count as a quest panel.
+        return text.contains("Main", ignoreCase = true) &&
+            text.contains("Quest", ignoreCase = true)
+    }
+
+    /**
+     * Screens matched by no template (chapter-select lists, transitions)
+     * are first given a chance to be the story map: [StoryMapFinder]
+     * searches for the "NEXT" node marker (template first, OCR fallback).
+     * Only when that also fails repeatedly do we treat the screen as an error.
      */
     private fun handleUnknown() {
         ++unknownStreak

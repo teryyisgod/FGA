@@ -66,19 +66,44 @@ class SupportScreenLocations @Inject constructor(
     val listSwipeStart = Location(-59, if (canLongSwipe) 1000 else 1190) + supportOffset
     val listSwipeEnd = Location(-89, if (canLongSwipe) 300 else 660) + supportOffset
 
-    fun locate(supportClass: SupportClass) = when (supportClass) {
-        SupportClass.None -> 0
-        SupportClass.All -> 184
-        SupportClass.Saber -> 320
-        SupportClass.Archer -> 454
-        SupportClass.Lancer -> 568
-        SupportClass.Rider -> 724
-        SupportClass.Caster -> 858
-        SupportClass.Assassin -> 994
-        SupportClass.Berserker -> 1130
-        SupportClass.Extra -> 1264
-        SupportClass.Mix -> 1402
-    }.let { x -> Location(x, 256) + headerOffset }
+    fun locate(supportClass: SupportClass): Location {
+        if (isWide) {
+            // On wide screens the class tab row does not spread with the
+            // script width. Measured on a 2048x877 (21:9) device, the
+            // fixed header offset drifts up to a full tab too far right
+            // by Berserker (tap landed on Extra instead), so use the
+            // measured tab centres as fractions of the script width.
+            val fraction = when (supportClass) {
+                SupportClass.None -> 0.0
+                SupportClass.All -> 0.10742
+                SupportClass.Saber -> 0.14014
+                SupportClass.Archer -> 0.17627
+                SupportClass.Lancer -> 0.21484
+                SupportClass.Rider -> 0.24902
+                SupportClass.Caster -> 0.28467
+                SupportClass.Assassin -> 0.31982
+                SupportClass.Berserker -> 0.35693
+                SupportClass.Extra -> 0.39063
+                SupportClass.Mix -> 0.43066
+            }
+
+            return Location((scriptArea.width * fraction).roundToInt(), 256)
+        }
+
+        return when (supportClass) {
+            SupportClass.None -> 0
+            SupportClass.All -> 184
+            SupportClass.Saber -> 320
+            SupportClass.Archer -> 454
+            SupportClass.Lancer -> 568
+            SupportClass.Rider -> 724
+            SupportClass.Caster -> 858
+            SupportClass.Assassin -> 994
+            SupportClass.Berserker -> 1130
+            SupportClass.Extra -> 1264
+            SupportClass.Mix -> 1402
+        }.let { x -> Location(x, 256) + headerOffset }
+    }
 
     val topScrollbarRegion = when(isWide) {
         true -> Region(-255, 325, 140, 55).xFromRight()

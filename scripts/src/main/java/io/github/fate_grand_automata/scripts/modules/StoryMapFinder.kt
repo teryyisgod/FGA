@@ -40,6 +40,9 @@ class StoryMapFinder @Inject constructor(
         /** Pinch-out gestures used to reach the whole-map zoom level. */
         const val ZOOM_OUT_PINCHES = 2
 
+        /** Pinch-in steps swept (with a search after each) on the way back in. */
+        const val ZOOM_IN_STEPS = 2
+
         /**
          * Similarity for the NEXT marker template. Measured against two JP
          * device screenshots: 0.97 (source frame) and 0.76 (same map, marker
@@ -73,14 +76,20 @@ class StoryMapFinder @Inject constructor(
         }
         searchCurrentView()?.let { return it }
 
-        // Zoom back in once, in case this chapter only opens zoomed in.
-        pincher(
-            locations.story.pinchCenter,
-            locations.story.pinchEndDistance,
-            locations.story.pinchStartDistance
-        )
-        1.seconds.wait()
-        return searchCurrentView()
+        // Sweep back in step by step, searching at every zoom level: the
+        // deepest zoom-out renders the marker smaller than any template,
+        // but the sweep passes through the levels the templates cover.
+        repeat(ZOOM_IN_STEPS) {
+            pincher(
+                locations.story.pinchCenter,
+                locations.story.pinchEndDistance,
+                locations.story.pinchStartDistance
+            )
+            1.seconds.wait()
+            searchCurrentView()?.let { return it }
+        }
+
+        return null
     }
 
     private fun searchCurrentView(): Location? {

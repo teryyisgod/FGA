@@ -24,13 +24,18 @@ class StoryLocations @Inject constructor(
      */
     val startQuestRegion = Region(-760, -380, 700, 320).xFromRight().yFromBottom()
 
-    /** Full story-map area scanned (via OCR) for the "NEXT" marker of the next quest node. */
+    /**
+     * Full story-map area scanned for the "NEXT" marker of the next quest
+     * node. Margins stay small on purpose: southern/northern edge nodes are
+     * legitimate targets — an earlier version cut 420px off the bottom and
+     * could not see edge nodes at all.
+     */
     val mapScanRegion: Region
         get() = Region(
-            scriptArea.x + 40,
-            scriptArea.y + 140,
-            scriptArea.width - 80,
-            scriptArea.height - 420
+            scriptArea.x + 20,
+            scriptArea.y + 90,
+            scriptArea.width - 40,
+            scriptArea.height - 200
         )
 
     /** Number of OCR grid columns/rows used to localise the "NEXT" marker on the map. */

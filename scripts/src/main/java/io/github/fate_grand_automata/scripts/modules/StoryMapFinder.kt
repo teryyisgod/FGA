@@ -67,8 +67,13 @@ class StoryMapFinder @Inject constructor(
     private fun findNextMarker(): Location? {
         val area = locations.story.mapScanRegion
 
-        // Next node on the chapter map itself.
+        // Next node on the chapter map itself. The marker is rendered at
+        // two sizes: zoomed into an area (StoryNext) and in the initial
+        // whole-map view (StoryNextWide) — try both.
         area.find(images[Images.StoryNext], NEXT_MARKER_SIMILARITY)
+            ?.let { match -> return match.region.center + locations.story.storyNodeOffset }
+
+        area.find(images[Images.StoryNextWide], NEXT_MARKER_SIMILARITY)
             ?.let { match -> return match.region.center + locations.story.storyNodeOffset }
 
         // Next chapter on the chapter-select list (rendered larger there):

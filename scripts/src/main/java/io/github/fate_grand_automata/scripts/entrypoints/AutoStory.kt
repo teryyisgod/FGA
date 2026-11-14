@@ -384,10 +384,11 @@ class AutoStory @Inject constructor(
      * re-tapping the already-selected node and the run never proceeded.
      */
     private fun isMainQuestPanelOpen(): Boolean {
-        if (locations.story.questPanelRegion.exists(
-                images[Images.StoryNextPanel],
-                similarity = StoryMapFinder.NEXT_MARKER_SIMILARITY
-            )
+        if (storyMapFinder.findScaled(
+                locations.story.questPanelRegion,
+                Images.StoryNextPanel,
+                StoryMapFinder.UI_MARKER_SCALES
+            ) != null
         ) {
             return true
         }

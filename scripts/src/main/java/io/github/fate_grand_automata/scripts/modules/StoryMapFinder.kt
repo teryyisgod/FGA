@@ -102,8 +102,14 @@ class StoryMapFinder @Inject constructor(
         }
 
         tracer?.let { trace ->
-            val best = area.findAll(base, 0.0).maxByOrNull { it.score }
-            trace("miss ${image.name} best=${best?.let { "%.2f".format(it.score) } ?: "?"}")
+            // Probe the best score with a single low-threshold find. Never
+            // probe at 0.0: findAll drains every local maximum above the
+            // threshold, which at 0.0 effectively never finishes.
+            val best = area.find(base, 0.45)
+            trace(
+                "miss ${image.name} best=" +
+                    (best?.let { "%.2f".format(it.score) } ?: "<0.45")
+            )
         }
 
         return null

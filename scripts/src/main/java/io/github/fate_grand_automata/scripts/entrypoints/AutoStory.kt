@@ -417,6 +417,7 @@ class AutoStory @Inject constructor(
      * re-tapping the already-selected node and the run never proceeded.
      */
     private fun isMainQuestPanelOpen(): Boolean {
+        trace("panel: checking")
         if (storyMapFinder.findScaled(
                 locations.story.questPanelRegion,
                 Images.StoryNextPanel,

@@ -69,6 +69,9 @@ class StoryMapFinder @Inject constructor(
         val UI_MARKER_SCALES = listOf(1.0, 0.95, 1.05, 0.9, 1.1)
     }
 
+    /** Diagnostic sink set by the entry point when the debug log is on. */
+    var tracer: ((String) -> Unit)? = null
+
     /**
      * Finds [image] in [area], trying the template at several scales.
      * Returns the first match (exact scale first, then near scales).
@@ -77,17 +80,30 @@ class StoryMapFinder @Inject constructor(
         val base = images[image]
 
         for (scale in scales) {
-            if (scale == 1.0) {
-                area.find(base, NEXT_MARKER_SIMILARITY)?.let { return it }
+            val match = if (scale == 1.0) {
+                area.find(base, NEXT_MARKER_SIMILARITY)
             } else {
                 val size = Size(
                     (base.width * scale).roundToInt(),
                     (base.height * scale).roundToInt()
                 )
                 base.resize(size).use { resized ->
-                    area.find(resized, NEXT_MARKER_SIMILARITY)?.let { return it }
+                    area.find(resized, NEXT_MARKER_SIMILARITY)
                 }
             }
+
+            if (match != null) {
+                tracer?.invoke(
+                    "HIT ${image.name} scale=$scale score=${"%.2f".format(match.score)} " +
+                        "at=${match.region.center}"
+                )
+                return match
+            }
+        }
+
+        tracer?.let { trace ->
+            val best = area.findAll(base, 0.0).maxByOrNull { it.score }
+            trace("miss ${image.name} best=${best?.let { "%.2f".format(it.score) } ?: "?"}")
         }
 
         return null
@@ -104,9 +120,11 @@ class StoryMapFinder @Inject constructor(
      * times before giving up.
      */
     fun findNextQuest(): Location? {
+        tracer?.invoke("search: current view")
         searchCurrentView()?.let { return it }
 
         // Zoom fully out and search the whole map.
+        tracer?.invoke("search: pinch out")
         repeat(ZOOM_OUT_PINCHES) {
             pincher(
                 locations.story.pinchCenter,
@@ -190,11 +208,13 @@ class StoryMapFinder @Inject constructor(
                     .getOrDefault("")
 
                 if (text.contains("NEXT", ignoreCase = true)) {
+                    tracer?.invoke("OCR hit cell($row,$col) text='${text.take(40)}'")
                     return cell.center
                 }
             }
         }
 
+        tracer?.invoke("OCR: no NEXT cell")
         return null
     }
 }

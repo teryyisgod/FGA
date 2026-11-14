@@ -99,15 +99,43 @@ class AutoStory @Inject constructor(
 
     private var lastState: StoryState? = null
 
+    /**
+     * Diagnostic trail, only collected while the debug log setting is on.
+     * When the run ends it is attached to the exit dialog so the exact
+     * decision path (scores, gate results, tap targets) can be read off
+     * the device instead of guessed from offline replays.
+     */
+    private val trail = StringBuilder()
+
+    private fun trace(msg: String) {
+        if (!prefs.story.debugLog) return
+
+        trail.appendLine(msg)
+        if (trail.length > 3000) {
+            trail.delete(0, trail.length - 3000)
+        }
+    }
+
+    private fun withTrail(reason: ExitReason): ExitException =
+        if (prefs.story.debugLog && trail.isNotEmpty() && reason !is ExitReason.Unexpected) {
+            ExitException(
+                ExitReason.Unexpected(
+                    IllegalStateException("DEBUG TRAIL:\n$trail")
+                )
+            )
+        } else {
+            ExitException(reason)
+        }
+
     override fun script(): Nothing {
         try {
             loop()
         } catch (e: StoryExitException) {
-            throw ExitException(e.reason)
+            throw withTrail(e.reason)
         } catch (e: AutoBattle.BattleExitException) {
             // Modules shared with AutoBattle report their exits this way; map
             // the ones Auto Story has an opinion about, stop safely otherwise.
-            throw ExitException(
+            throw withTrail(
                 when (e.reason) {
                     AutoBattle.ExitReason.APRanOut -> ExitReason.APRanOut
                     AutoBattle.ExitReason.SupportSelectionManual -> ExitReason.SupportSelectionManual
@@ -118,7 +146,7 @@ class AutoStory @Inject constructor(
                 }
             )
         } catch (_: ScriptAbortException) {
-            throw ExitException(ExitReason.Abort)
+            throw withTrail(ExitReason.Abort)
         } catch (e: Exception) {
             throw ExitException(ExitReason.Unexpected(e))
         }
@@ -127,6 +155,8 @@ class AutoStory @Inject constructor(
     override fun pausedStatus() = ExitException(ExitReason.Abort)
 
     private fun loop(): Nothing {
+        storyMapFinder.tracer = ::trace
+
         while (true) {
             if (completedQuests >= prefs.story.maxQuests) {
                 throw StoryExitException(ExitReason.MaxQuestsReached(completedQuests))
@@ -146,6 +176,7 @@ class AutoStory @Inject constructor(
 
             if (prefs.story.debugLog && state != lastState) {
                 messages.log(ScriptLog.AutoStoryState(state.name, completedQuests))
+                trace("state=$state")
             }
             lastState = state
 
@@ -337,6 +368,7 @@ class AutoStory @Inject constructor(
         if (isMainQuestPanelOpen()) {
             // Click the uppermost quest, exactly like AutoBattle.menu().
             // The Main Quest banner (with the NEXT marker) is listed first.
+            trace("tap quest-start at ${locations.menuSelectQuestClick}")
             locations.menuSelectQuestClick.click()
 
             questActive = true
@@ -358,6 +390,7 @@ class AutoStory @Inject constructor(
         // also replaces a wrong (Free Quest) panel that may be open.
         val next = storyMapFinder.findNextQuest()
         if (next != null) {
+            trace("tap node at $next")
             next.click()
             noTargetStreak = 0
             2.seconds.wait()
@@ -390,6 +423,7 @@ class AutoStory @Inject constructor(
                 StoryMapFinder.UI_MARKER_SCALES
             ) != null
         ) {
+            trace("panel: TEMPLATE hit")
             return true
         }
 
@@ -398,8 +432,11 @@ class AutoStory @Inject constructor(
 
         // Both words are required: the chapter-select header reads
         // "Main Record", which must not count as a quest panel.
-        return text.contains("Main", ignoreCase = true) &&
+        val result = text.contains("Main", ignoreCase = true) &&
             text.contains("Quest", ignoreCase = true)
+
+        trace("panel: template miss, ocr='${text.take(60)}' -> $result")
+        return result
     }
 
     /**

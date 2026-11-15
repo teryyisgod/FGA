@@ -5,6 +5,7 @@ import io.github.fate_grand_automata.scripts.Images
 import io.github.fate_grand_automata.scripts.ScriptLog
 import io.github.fate_grand_automata.scripts.ScriptNotify
 import io.github.fate_grand_automata.scripts.enums.SupportSelectionModeEnum
+import io.github.fate_grand_automata.scripts.enums.SupportClass
 import io.github.fate_grand_automata.scripts.enums.StoryState
 import io.github.fate_grand_automata.scripts.modules.Battle
 import io.github.fate_grand_automata.scripts.modules.ConnectionRetry
@@ -250,6 +251,7 @@ class AutoStory @Inject constructor(
                     // retried in First mode on failure), which stalled
                     // on this screen with the preferred servant visible.
                     trace("support: built-in selection, class=${supportPrefs.supportClass}")
+                    prepareSupportScreen()
                     try {
                         support.selectSupport()
                     } catch (e: AutoBattle.BattleExitException) {
@@ -462,6 +464,34 @@ class AutoStory @Inject constructor(
             else -> false
         }
     }
+
+    /**
+     * The built-in support selection first waits for the list to load,
+     * and that wait treats "the ALL-tab icon is not recognisable" as
+     * "a dialog is open", delaying forever without tapping anything.
+     * The icon is a 30x31 template whose score flickers around the
+     * recognition threshold on some devices, so the wait can stick
+     * indefinitely on a fully loaded list (observed on device: no
+     * taps, no refresh, frozen screen). Nudge the tab bar by tapping
+     * the ALL tab — the same thing the user did by hand to unstick
+     * it — and re-check a few times before handing over to the
+     * built-in selection, which then taps the configured class tab
+     * itself as usual.
+     */
+    private fun prepareSupportScreen() {
+        var nudges = 0
+        while (!isSupportExtraVisible() && nudges < 3) {
+            trace("support: ALL-tab icon not recognised, nudging tab bar")
+            locations.support.locate(SupportClass.All).click()
+            ++nudges
+            1.seconds.wait()
+        }
+
+        trace("support: ALL-tab icon recognised=${isSupportExtraVisible()} after $nudges nudge(s)")
+    }
+
+    private fun isSupportExtraVisible() =
+        images[Images.SupportExtra] in locations.support.extraRegion
 
     // ------------------------------------------------------------------
     // State handlers

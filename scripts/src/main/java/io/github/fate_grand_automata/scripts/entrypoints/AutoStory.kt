@@ -239,6 +239,23 @@ class AutoStory @Inject constructor(
                 continue
             }
 
+            // Battle fast path: while a battle is running, the full
+            // overlay + state detection below costs extra screenshots
+            // and a dozen template checks per turn and only delays the
+            // next turn. If the battle screen is still up (and no
+            // connection dialog covers it), play the next turn
+            // directly. Anything else — victory, the defeat/continue
+            // dialog, a story scene — hides the battle screen and
+            // falls through to the full detection.
+            if (lastState == StoryState.BATTLE &&
+                useSameSnapIn { !connectionRetry.needsToRetry() && isInBattle() }
+            ) {
+                questProgressed = true
+                battle.performBattle()
+                prefs.story.actionInterval.wait()
+                continue
+            }
+
             // Sub-screens that must win over the generic detectors below.
             if (handleOverlayScreens()) {
                 prefs.story.actionInterval.wait()

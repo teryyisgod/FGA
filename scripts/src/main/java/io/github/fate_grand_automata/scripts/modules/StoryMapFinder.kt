@@ -4,6 +4,7 @@ import io.github.fate_grand_automata.scripts.IFgoAutomataApi
 import io.github.fate_grand_automata.scripts.Images
 import io.github.lib_automata.Location
 import io.github.lib_automata.Match
+import io.github.lib_automata.Pattern
 import io.github.lib_automata.Pincher
 import io.github.lib_automata.Region
 import io.github.lib_automata.Size
@@ -80,17 +81,7 @@ class StoryMapFinder @Inject constructor(
         val base = images[image]
 
         for (scale in scales) {
-            val match = if (scale == 1.0) {
-                area.find(base, NEXT_MARKER_SIMILARITY)
-            } else {
-                val size = Size(
-                    (base.width * scale).roundToInt(),
-                    (base.height * scale).roundToInt()
-                )
-                base.resize(size).use { resized ->
-                    area.find(resized, NEXT_MARKER_SIMILARITY)
-                }
-            }
+            val match = findAtScale(area, base, scale)
 
             if (match != null) {
                 tracer?.invoke(
@@ -179,8 +170,8 @@ class StoryMapFinder @Inject constructor(
 
         // Next node on the chapter map itself. The marker's rendering
         // varies with zoom level and map brightness, so tight-cut
-        // variants are tried, each at a ladder of scales; the tap target
-        // is the node just below the marker in every case. The gold-text
+        // variants are tried at a ladder of scales; the tap target is
+        // the node just below the marker in every case. The gold-text
         // variant (e.g. E Pluribus Unum) has its own cut geometry, hence
         // its own node offset.
         val variants = listOf(
@@ -190,18 +181,50 @@ class StoryMapFinder @Inject constructor(
             Images.StoryNextGold to locations.story.goldNodeOffset
         )
 
-        for ((image, nodeOffset) in variants) {
-            findScaled(area, image, MARKER_SCALES)
-                ?.let { match -> return match.region.center + nodeOffset }
+        // One shared screenshot for the whole sweep, scales outermost:
+        // every find used to capture a fresh screenshot, so a full miss
+        // cost dozens of captures (seconds per view, and the marker's
+        // pulse animation changed between captures). Trying the exact
+        // scale for every variant first also finds the common case in
+        // a handful of matches.
+        val found = useSameSnapIn {
+            for (scale in MARKER_SCALES) {
+                for ((image, nodeOffset) in variants) {
+                    findAtScale(area, images[image], scale)?.let { match ->
+                        tracer?.invoke(
+                            "HIT ${image.name} scale=$scale score=${"%.2f".format(match.score)} " +
+                                "at=${match.region.center}"
+                        )
+                        return@useSameSnapIn match.region.center + nodeOffset
+                    }
+                }
+            }
+
+            // Next chapter on the chapter-select list (rendered larger
+            // there): tapping it enters that chapter's map, so chapter
+            // boundaries are crossed with the same search.
+            findScaled(area, Images.StoryNextChapter, UI_MARKER_SCALES)
+                ?.let { match -> return@useSameSnapIn match.region.center + locations.story.chapterNodeOffset }
+
+            null
         }
 
-        // Next chapter on the chapter-select list (rendered larger there):
-        // tapping it enters that chapter's map, so chapter boundaries are
-        // crossed with the same search.
-        findScaled(area, Images.StoryNextChapter, UI_MARKER_SCALES)
-            ?.let { match -> return match.region.center + locations.story.chapterNodeOffset }
+        return found ?: findNextMarkerByOcr()
+    }
 
-        return findNextMarkerByOcr()
+    /** Single-scale match of [base] in [area] at the marker similarity. */
+    private fun findAtScale(area: Region, base: Pattern, scale: Double): Match? {
+        return if (scale == 1.0) {
+            area.find(base, NEXT_MARKER_SIMILARITY)
+        } else {
+            val size = Size(
+                (base.width * scale).roundToInt(),
+                (base.height * scale).roundToInt()
+            )
+            base.resize(size).use { resized ->
+                area.find(resized, NEXT_MARKER_SIMILARITY)
+            }
+        }
     }
 
     private fun findNextMarkerByOcr(): Location? {

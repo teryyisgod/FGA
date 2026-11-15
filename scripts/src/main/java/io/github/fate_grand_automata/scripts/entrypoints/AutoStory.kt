@@ -5,7 +5,6 @@ import io.github.fate_grand_automata.scripts.Images
 import io.github.fate_grand_automata.scripts.ScriptLog
 import io.github.fate_grand_automata.scripts.ScriptNotify
 import io.github.fate_grand_automata.scripts.enums.SupportSelectionModeEnum
-import io.github.fate_grand_automata.scripts.enums.SupportClass
 import io.github.fate_grand_automata.scripts.enums.StoryState
 import io.github.fate_grand_automata.scripts.modules.Battle
 import io.github.fate_grand_automata.scripts.modules.ConnectionRetry
@@ -13,6 +12,7 @@ import io.github.fate_grand_automata.scripts.modules.PartySelection
 import io.github.fate_grand_automata.scripts.modules.Refill
 import io.github.fate_grand_automata.scripts.modules.StoryMapFinder
 import io.github.fate_grand_automata.scripts.modules.Support
+import io.github.fate_grand_automata.scripts.modules.SupportScreen
 import io.github.fate_grand_automata.scripts.modules.Withdraw
 import io.github.fate_grand_automata.scripts.prefs.ISupportPreferences
 import io.github.lib_automata.EntryPoint
@@ -55,6 +55,7 @@ class AutoStory @Inject constructor(
     private val withdraw: Withdraw,
     private val refill: Refill,
     private val storyMapFinder: StoryMapFinder,
+    private val supportScreen: SupportScreen,
     private val supportPrefs: ISupportPreferences
 ) : EntryPoint(exitManager), IFgoAutomataApi by api {
 
@@ -251,24 +252,32 @@ class AutoStory @Inject constructor(
                     // retried in First mode on failure), which stalled
                     // on this screen with the preferred servant visible.
                     trace("support: built-in selection, class=${supportPrefs.supportClass}")
-                    prepareSupportScreen()
-                    try {
-                        support.selectSupport()
-                    } catch (e: AutoBattle.BattleExitException) {
-                        // Device evidence: the built-in selection throws
-                        // here (null message; the class name is obfuscated
-                        // in release builds, so trace the reason instead).
-                        trace("support: BattleExit reason=${e.reason}")
-                        if (e.reason != AutoBattle.ExitReason.SupportSelectionManual) {
-                            throw e
-                        }
+                    if (isGuestOnlySupportList()) {
+                        // Story quests whose support list contains only
+                        // the pinned NPC guests can never satisfy the
+                        // preferred search (the configured class/servant
+                        // is not in the list), and the built-in search
+                        // then grinds through scroll/refresh cycles for
+                        // minutes, looking frozen. Take the first guest
+                        // directly, like a player would.
+                        trace("support: guest-only list, taking first guest")
+                        supportScreen.scrollToTop()
+                        locations.support.firstSupportClick.click()
 
-                        // The preferred search gave up. A story quest
-                        // always offers at least the pinned Guest Servant,
-                        // so take the first entry and keep going instead
-                        // of ending the run on the selection screen.
-                        trace("support: preferred search gave up, taking first entry")
-                        support.selectSupport(SupportSelectionModeEnum.First)
+                        val picked = locations.support.screenCheckRegion.waitVanish(
+                            images[Images.SupportScreen],
+                            similarity = 0.85,
+                            timeout = 10.seconds
+                        )
+
+                        if (picked) {
+                            trace("support: guest selected")
+                        } else {
+                            trace("support: guest tap did not leave the screen, using built-in selection")
+                            selectSupportWithFallback()
+                        }
+                    } else {
+                        selectSupportWithFallback()
                     }
                     trace("support: selected")
 
@@ -466,32 +475,61 @@ class AutoStory @Inject constructor(
     }
 
     /**
-     * The built-in support selection first waits for the list to load,
-     * and that wait treats "the ALL-tab icon is not recognisable" as
-     * "a dialog is open", delaying forever without tapping anything.
-     * The icon is a 30x31 template whose score flickers around the
-     * recognition threshold on some devices, so the wait can stick
-     * indefinitely on a fully loaded list (observed on device: no
-     * taps, no refresh, frozen screen). Nudge the tab bar by tapping
-     * the ALL tab — the same thing the user did by hand to unstick
-     * it — and re-check a few times before handing over to the
-     * built-in selection, which then taps the configured class tab
-     * itself as usual.
+     * The built-in selection with its SupportSelectionManual fallback:
+     * when the preferred search gives up, take the first entry (a
+     * story quest always offers at least the pinned Guest Servant)
+     * instead of ending the run on the selection screen.
      */
-    private fun prepareSupportScreen() {
-        var nudges = 0
-        while (!isSupportExtraVisible() && nudges < 3) {
-            trace("support: ALL-tab icon not recognised, nudging tab bar")
-            locations.support.locate(SupportClass.All).click()
-            ++nudges
-            1.seconds.wait()
-        }
+    private fun selectSupportWithFallback() {
+        try {
+            support.selectSupport()
+        } catch (e: AutoBattle.BattleExitException) {
+            trace("support: BattleExit reason=${e.reason}")
+            if (e.reason != AutoBattle.ExitReason.SupportSelectionManual) {
+                throw e
+            }
 
-        trace("support: ALL-tab icon recognised=${isSupportExtraVisible()} after $nudges nudge(s)")
+            trace("support: preferred search gave up, taking first entry")
+            support.selectSupport(SupportSelectionModeEnum.First)
+        }
     }
 
-    private fun isSupportExtraVisible() =
-        images[Images.SupportExtra] in locations.support.extraRegion
+    /**
+     * Whether the visible support list contains only NPC guests:
+     * guest rows carry the Guest marker on the list's right edge and
+     * never show the support-setup button that friend rows have.
+     * Probes the list, scrolls down once and probes again, so friends
+     * below the fold are not mistaken for a guest-only list.
+     */
+    private fun isGuestOnlySupportList(): Boolean {
+        if (!guestOnlyProbe()) return false
+
+        supportScreen.scrollDown()
+        1.seconds.wait()
+
+        val stillGuestOnly = guestOnlyProbe()
+        trace("support: guest-only after scroll=$stillGuestOnly")
+
+        if (!stillGuestOnly) {
+            // Friends exist below the fold; restore the list position
+            // for the built-in selection.
+            supportScreen.scrollToTop()
+        }
+
+        return stillGuestOnly
+    }
+
+    private fun guestOnlyProbe(): Boolean = useSameSnapIn {
+        val guest = locations.support.friendRegion
+            .findAll(images[Images.Guest], 0.45).firstOrNull()
+        val tool = locations.support.confirmSetupButtonRegion
+            .findAll(images[Images.SupportConfirmSetupButton], 0.45).firstOrNull()
+
+        trace("support: probe guest=${guest?.score} tool=${tool?.score}")
+
+        guest != null && guest.score >= 0.8 &&
+            (tool == null || tool.score < Support.supportRegionToolSimilarity)
+    }
 
     // ------------------------------------------------------------------
     // State handlers

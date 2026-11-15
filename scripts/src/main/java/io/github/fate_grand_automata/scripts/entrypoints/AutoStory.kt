@@ -17,6 +17,7 @@ import io.github.fate_grand_automata.scripts.modules.Withdraw
 import io.github.fate_grand_automata.scripts.prefs.ISupportPreferences
 import io.github.lib_automata.EntryPoint
 import io.github.lib_automata.ExitManager
+import io.github.lib_automata.Match
 import io.github.lib_automata.ScriptAbortException
 import io.github.lib_automata.dagger.ScriptScope
 import javax.inject.Inject
@@ -501,31 +502,42 @@ class AutoStory @Inject constructor(
     }
 
     /**
-     * Whether the visible support list contains only NPC guests:
-     * guest rows carry the Guest marker on the list's right edge and
-     * never show the support-setup button that friend rows have.
-     * Probes the list, scrolls down once and probes again, so friends
-     * below the fold are not mistaken for a guest-only list.
+     * Whether the support list opens with only NPC guests: guest rows
+     * carry the Guest marker on the list's right edge and never show
+     * the support-setup button that friend rows have. Decided on the
+     * first screenful only — in a mixed list the pinned guests sit on
+     * top, and taking one is fine for story progression, while the
+     * preferred search would grind through scroll/refresh cycles for
+     * a servant who is not in the list at all. (An earlier version
+     * scrolled and re-probed, but the scrolled view can surface the
+     * setup button of a friend further down — or a look-alike — and
+     * veto the shortcut on genuinely guest-only quests.) The probe
+     * retries briefly while the screen is still sliding in.
      */
     private fun isGuestOnlySupportList(): Boolean {
-        if (!guestOnlyProbe()) return false
+        repeat(3) { attempt ->
+            val (guest, tool) = probeSupportList()
 
-        supportScreen.scrollDown()
-        1.seconds.wait()
+            when {
+                guest != null && (tool == null || tool.score < Support.supportRegionToolSimilarity) -> {
+                    trace("support: guest-only list detected")
+                    return true
+                }
 
-        val stillGuestOnly = guestOnlyProbe()
-        trace("support: guest-only after scroll=$stillGuestOnly")
+                tool != null && tool.score >= Support.supportRegionToolSimilarity -> {
+                    trace("support: friend rows visible, using built-in selection")
+                    return false
+                }
 
-        if (!stillGuestOnly) {
-            // Friends exist below the fold; restore the list position
-            // for the built-in selection.
-            supportScreen.scrollToTop()
+                attempt < 2 -> 1.seconds.wait()
+            }
         }
 
-        return stillGuestOnly
+        trace("support: guest probe inconclusive, using built-in selection")
+        return false
     }
 
-    private fun guestOnlyProbe(): Boolean = useSameSnapIn {
+    private fun probeSupportList(): Pair<Match?, Match?> = useSameSnapIn {
         val guest = locations.support.friendRegion
             .findAll(images[Images.Guest], 0.45).firstOrNull()
         val tool = locations.support.confirmSetupButtonRegion
@@ -533,8 +545,11 @@ class AutoStory @Inject constructor(
 
         trace("support: probe guest=${guest?.score} tool=${tool?.score}")
 
-        guest != null && guest.score >= 0.8 &&
-            (tool == null || tool.score < Support.supportRegionToolSimilarity)
+        // A guest marker below the built-in "in" similarity still
+        // counts as a guest sighting for the caller's decision.
+        val guestSeen = guest?.takeIf { it.score >= 0.8 }
+
+        guestSeen to tool
     }
 
     // ------------------------------------------------------------------

@@ -224,7 +224,7 @@ class StoryMapFinder @Inject constructor(
                     .getOrDefault("")
 
                 if (text.contains("NEXT", ignoreCase = true)) {
-                    tracer?.invoke("OCR hit cell($row,$col) text='${text.take(40)}'")
+                    tracer?.invoke("OCR hit cell($row,$col)")
 
                     // A grid cell is far bigger than the marker, so its
                     // centre can be hundreds of pixels away from the node.

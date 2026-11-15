@@ -146,7 +146,7 @@ class AutoStory @Inject constructor(
             // trail alone cannot distinguish a user abort from a failure.
             ExitException(
                 ExitReason.Unexpected(
-                    IllegalStateException("exit=${reason.javaClass.simpleName}\nDEBUG TRAIL:\n$trail")
+                    IllegalStateException("DEBUG TRAIL:\n$trail\nEXIT=${reason.javaClass.simpleName}")
                 )
             )
         } else {
@@ -178,7 +178,7 @@ class AutoStory @Inject constructor(
                 if (prefs.story.debugLog) {
                     ExitReason.Unexpected(
                         IllegalStateException(
-                            "error=${e.javaClass.simpleName}: ${e.message}\nDEBUG TRAIL:\n$trail"
+                            "DEBUG TRAIL:\n$trail\nERROR=${e.javaClass.simpleName}: ${e.message}"
                         )
                     )
                 } else {
@@ -249,7 +249,15 @@ class AutoStory @Inject constructor(
                     // retried in First mode on failure), which stalled
                     // on this screen with the preferred servant visible.
                     trace("support: built-in selection, class=${supportPrefs.supportClass}")
-                    support.selectSupport()
+                    try {
+                        support.selectSupport()
+                    } catch (e: Throwable) {
+                        // Traced, then rethrown unchanged: the failure
+                        // inside the built-in selection was invisible
+                        // because the exit line sat above the trail.
+                        trace("support: threw ${e.javaClass.simpleName}: ${e.message}")
+                        throw e
+                    }
                     trace("support: selected")
 
                     4.seconds.wait()
@@ -606,7 +614,7 @@ class AutoStory @Inject constructor(
         val result = text.contains("Main", ignoreCase = true) &&
             text.contains("Quest", ignoreCase = true)
 
-        trace("panel: template miss, ocr='${text.take(60)}' -> $result")
+        trace("panel: template miss, ocr -> $result")
         return result
     }
 

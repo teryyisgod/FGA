@@ -5,14 +5,12 @@ import io.github.fate_grand_automata.scripts.Images
 import io.github.fate_grand_automata.scripts.ScriptLog
 import io.github.fate_grand_automata.scripts.ScriptNotify
 import io.github.fate_grand_automata.scripts.enums.StoryState
-import io.github.fate_grand_automata.scripts.enums.SupportSelectionModeEnum
 import io.github.fate_grand_automata.scripts.modules.Battle
 import io.github.fate_grand_automata.scripts.modules.ConnectionRetry
 import io.github.fate_grand_automata.scripts.modules.PartySelection
 import io.github.fate_grand_automata.scripts.modules.Refill
 import io.github.fate_grand_automata.scripts.modules.StoryMapFinder
 import io.github.fate_grand_automata.scripts.modules.Support
-import io.github.fate_grand_automata.scripts.modules.SupportScreenRefresher
 import io.github.fate_grand_automata.scripts.modules.Withdraw
 import io.github.fate_grand_automata.scripts.prefs.ISupportPreferences
 import io.github.lib_automata.EntryPoint
@@ -55,7 +53,6 @@ class AutoStory @Inject constructor(
     private val withdraw: Withdraw,
     private val refill: Refill,
     private val storyMapFinder: StoryMapFinder,
-    private val supportScreenRefresher: SupportScreenRefresher,
     private val supportPrefs: ISupportPreferences
 ) : EntryPoint(exitManager), IFgoAutomataApi by api {
 
@@ -243,29 +240,16 @@ class AutoStory @Inject constructor(
                 }
 
                 StoryState.SUPPORT_SELECT -> {
-                    // Wait for the support list to finish loading and tap
-                    // the configured class tab from a settled screen (the
-                    // refresher does exactly that: wait, then pick). Tapping
-                    // the tab the moment this state was detected raced the
-                    // screen transition, so the jump was sometimes
-                    // swallowed and the search ran on the wrong class list.
-                    trace("support: waiting for list, class=${supportPrefs.supportClass}")
-                    supportScreenRefresher.waitForSupportScreenToLoad()
-                    trace("support: list loaded, class tab tapped")
-
-                    try {
-                        support.selectSupport()
-                    } catch (e: AutoBattle.BattleExitException) {
-                        if (e.reason != AutoBattle.ExitReason.SupportSelectionManual) {
-                            throw e
-                        }
-
-                        // The preferred support is not listed for this
-                        // quest: take the first entry (the pinned Guest
-                        // Servant on story quests) instead of stopping.
-                        trace("support: preferred not found, taking first entry")
-                        support.selectSupport(SupportSelectionModeEnum.First)
-                    }
+                    // Exactly the farming flow's support step, nothing
+                    // before or after it: the built-in selection waits
+                    // for the list, taps the configured class tab and
+                    // searches/falls back per the user's own support
+                    // preferences. Auto Story previously waited and
+                    // class-picked once more ahead of this call (and
+                    // retried in First mode on failure), which stalled
+                    // on this screen with the preferred servant visible.
+                    trace("support: built-in selection, class=${supportPrefs.supportClass}")
+                    support.selectSupport()
                     trace("support: selected")
 
                     4.seconds.wait()

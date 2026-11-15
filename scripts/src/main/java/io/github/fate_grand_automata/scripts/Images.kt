@@ -27,6 +27,8 @@ enum class Images(val path: String) {
     StoryStartQuest("story_start_quest.png"),
     StoryNextPanel("story_next_panel.png"),
     QuestStartConfirm("quest_start_confirm.png"),
+    DialogClose("close_dialog.png"),
+    PopupCloseX("popup_close_x.png"),
     Menu("menu.png"),
     Stamina("stamina.png"),
     Result("result.png"),

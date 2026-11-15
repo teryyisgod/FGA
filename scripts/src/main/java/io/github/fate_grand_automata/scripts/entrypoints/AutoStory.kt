@@ -447,6 +447,24 @@ class AutoStory @Inject constructor(
     }
 
     private fun handleOverlayScreens(): Boolean = useSameSnapIn {
+        // Chapter-clear reward / unlock-notice dialogs: a lone close
+        // button at the bottom centre. Dismiss before anything else
+        // interprets the covered screen.
+        locations.story.dialogCloseRegion.find(images[Images.DialogClose])?.let { match ->
+            trace("dialog: close button, dismissing")
+            match.region.center.click()
+            return@useSameSnapIn true
+        }
+
+        // Illustrated chapter-unlock popups close via the x at the
+        // frame's top-right corner. (The OCR-gated notice path taps an
+        // estimate of the same point; this template gate is exact.)
+        locations.story.popupCloseRegion.find(images[Images.PopupCloseX])?.let { match ->
+            trace("dialog: popup close (x), dismissing")
+            match.region.center.click()
+            return@useSameSnapIn true
+        }
+
         when {
             // Quest-start confirmation ("クエストを開始しますか？"):
             // quests whose party is formed right before battle show

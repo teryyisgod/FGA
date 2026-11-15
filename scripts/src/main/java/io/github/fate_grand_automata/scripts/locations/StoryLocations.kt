@@ -58,6 +58,26 @@ class StoryLocations @Inject constructor(
     val questStartConfirmClick = Location(400, 1128).xFromCenter()
 
     /**
+     * Region holding the lone "閉じる" button of the confirmation
+     * dialogs shown after a chapter clear (chapter-clear rewards,
+     * free-unlock notices, servant-join notices). The
+     * [io.github.fate_grand_automata.scripts.Images.DialogClose]
+     * template is the button's text, cut from a device screenshot
+     * (1.00 on both observed dialogs, <=0.56 elsewhere).
+     */
+    val dialogCloseRegion = Region(-330, 1020, 660, 220).xFromCenter()
+
+    /**
+     * Region holding the x button of illustrated announcement popups
+     * (e.g. the next-chapter unlock splash), at the popup frame's
+     * top-right corner. The
+     * [io.github.fate_grand_automata.scripts.Images.PopupCloseX]
+     * template scores 1.00 on the unlock popup and <=0.35 elsewhere
+     * inside this region.
+     */
+    val popupCloseRegion = Region(-720, 10, 380, 180).xFromRight()
+
+    /**
      * Full story-map area scanned for the "NEXT" marker of the next quest
      * node. Margins stay small on purpose: southern/northern edge nodes are
      * legitimate targets — an earlier version cut 420px off the bottom and

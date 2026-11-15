@@ -448,6 +448,18 @@ class AutoStory @Inject constructor(
 
     private fun handleOverlayScreens(): Boolean = useSameSnapIn {
         when {
+            // Quest-start confirmation ("クエストを開始しますか？"):
+            // quests whose party is formed right before battle show
+            // this dialog after the quest entry is tapped. Only while
+            // a quest is in flight, so the start position is never
+            // tapped on unrelated screens.
+            questActive &&
+                images[Images.QuestStartConfirm] in locations.story.questStartConfirmRegion -> {
+                trace("dialog: quest-start confirm, tapping start")
+                locations.story.questStartConfirmClick.click()
+                true
+            }
+
             images[Images.SupportExtra] in locations.resultFriendRequestRegion -> {
                 // Friend request after using a non-friend support: decline.
                 locations.resultFriendRequestRejectClick.click()

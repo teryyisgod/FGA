@@ -43,6 +43,21 @@ class StoryLocations @Inject constructor(
     val leylineConfirmClick = Location(430, 830).xFromCenter()
 
     /**
+     * Region holding the "クエストを開始しますか？" line of the quest-start
+     * confirmation dialog. Some story quests (party formation happens
+     * right before battle) show this dialog after the quest entry is
+     * tapped, before the support list. The
+     * [io.github.fate_grand_automata.scripts.Images.QuestStartConfirm]
+     * template is the question line itself, cut from a device
+     * screenshot (1.00 on the source dialog, <=0.30 on map / support /
+     * continue screens).
+     */
+    val questStartConfirmRegion = Region(-580, 660, 1160, 160).xFromCenter()
+
+    /** The "開始" (start) button of the quest-start confirmation dialog. */
+    val questStartConfirmClick = Location(400, 1128).xFromCenter()
+
+    /**
      * Full story-map area scanned for the "NEXT" marker of the next quest
      * node. Margins stay small on purpose: southern/northern edge nodes are
      * legitimate targets — an earlier version cut 420px off the bottom and

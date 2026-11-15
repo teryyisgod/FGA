@@ -13,11 +13,16 @@ import io.github.fate_grand_automata.scripts.modules.Refill
 import io.github.fate_grand_automata.scripts.modules.StoryMapFinder
 import io.github.fate_grand_automata.scripts.modules.Support
 import io.github.fate_grand_automata.scripts.modules.SupportScreen
+import io.github.fate_grand_automata.scripts.modules.SupportScreenRefresher
+import io.github.fate_grand_automata.scripts.supportSelection.PreferredSupportSelection
+import io.github.fate_grand_automata.scripts.supportSelection.SupportSelectionResult
 import io.github.fate_grand_automata.scripts.modules.Withdraw
 import io.github.fate_grand_automata.scripts.prefs.ISupportPreferences
 import io.github.lib_automata.EntryPoint
 import io.github.lib_automata.ExitManager
 import io.github.lib_automata.Match
+import io.github.lib_automata.Location
+import io.github.lib_automata.Swiper
 import io.github.lib_automata.ScriptAbortException
 import io.github.lib_automata.dagger.ScriptScope
 import javax.inject.Inject
@@ -57,6 +62,9 @@ class AutoStory @Inject constructor(
     private val refill: Refill,
     private val storyMapFinder: StoryMapFinder,
     private val supportScreen: SupportScreen,
+    private val supportScreenRefresher: SupportScreenRefresher,
+    private val preferredSelection: PreferredSupportSelection,
+    private val swiper: Swiper,
     private val supportPrefs: ISupportPreferences
 ) : EntryPoint(exitManager), IFgoAutomataApi by api {
 
@@ -106,6 +114,11 @@ class AutoStory @Inject constructor(
 
         /** Similarity for the Leyline Stone button caption on the defeat dialog. */
         const val LEYLINE_BUTTON_SIMILARITY = 0.8
+        /** Half-screen scroll steps per pass of the preferred-support scan. */
+        const val MAX_SCAN_STEPS = 24
+
+        /** List refreshes allowed during the preferred-support scan. */
+        const val MAX_SUPPORT_REFRESHES = 2
     }
 
     private var completedQuests = 0
@@ -250,42 +263,12 @@ class AutoStory @Inject constructor(
                 }
 
                 StoryState.SUPPORT_SELECT -> {
-                    // Exactly the farming flow's support step, nothing
-                    // before or after it: the built-in selection waits
-                    // for the list, taps the configured class tab and
-                    // searches/falls back per the user's own support
-                    // preferences. Auto Story previously waited and
-                    // class-picked once more ahead of this call (and
-                    // retried in First mode on failure), which stalled
-                    // on this screen with the preferred servant visible.
-                    trace("support: built-in selection, class=${supportPrefs.supportClass}")
-                    if (isGuestOnlySupportList()) {
-                        // Story quests whose support list contains only
-                        // the pinned NPC guests can never satisfy the
-                        // preferred search (the configured class/servant
-                        // is not in the list), and the built-in search
-                        // then grinds through scroll/refresh cycles for
-                        // minutes, looking frozen. Take the first guest
-                        // directly, like a player would.
-                        trace("support: guest-only list, taking first guest")
-                        supportScreen.scrollToTop()
-                        locations.support.firstSupportClick.click()
-
-                        val picked = locations.support.screenCheckRegion.waitVanish(
-                            images[Images.SupportScreen],
-                            similarity = 0.85,
-                            timeout = 10.seconds
-                        )
-
-                        if (picked) {
-                            trace("support: guest selected")
-                        } else {
-                            trace("support: guest tap did not leave the screen, using built-in selection")
-                            selectSupportWithFallback()
-                        }
-                    } else {
-                        selectSupportWithFallback()
-                    }
+                    // Story-mode support choice (see selectSupportForStory):
+                    // the preferred servant wins whenever she is in the
+                    // list; the first entry (friend or pinned guest) is
+                    // only the fallback when she is not.
+                    trace("support: story selection, class=${supportPrefs.supportClass}")
+                    selectSupportForStory()
                     trace("support: selected")
 
                     4.seconds.wait()
@@ -502,54 +485,109 @@ class AutoStory @Inject constructor(
     }
 
     /**
-     * Whether the support list opens with only NPC guests: guest rows
-     * carry the Guest marker on the list's right edge and never show
-     * the support-setup button that friend rows have. Decided on the
-     * first screenful only — in a mixed list the pinned guests sit on
-     * top, and taking one is fine for story progression, while the
-     * preferred search would grind through scroll/refresh cycles for
-     * a servant who is not in the list at all. (An earlier version
-     * scrolled and re-probed, but the scrolled view can surface the
-     * setup button of a friend further down — or a look-alike — and
-     * veto the shortcut on genuinely guest-only quests.) The probe
-     * retries briefly while the screen is still sliding in.
+     * Story-mode support selection. The user wants the preferred
+     * servant (Morgan) whenever she is offered; the built-in search
+     * sometimes misses her anyway — its full-screen scroll steps can
+     * jump over the seam between two screenfuls, so a servant sitting
+     * on a seam is skipped on every pass and the fallback picks the
+     * top entry (often a pinned guest). This scan drives the built-in
+     * preferred matcher directly with half-screen scroll steps (every
+     * row is fully visible on some screenful), refreshes the list at
+     * most [MAX_SUPPORT_REFRESHES] times and only when friend rows
+     * exist at all, and falls back to the first entry when the
+     * preferred servant is genuinely not in the list (guest-only
+     * story quests). Non-preferred configurations keep the built-in
+     * flow untouched.
      */
-    private fun isGuestOnlySupportList(): Boolean {
-        repeat(3) { attempt ->
-            val (guest, tool) = probeSupportList()
-
-            when {
-                guest != null && (tool == null || tool.score < Support.supportRegionToolSimilarity) -> {
-                    trace("support: guest-only list detected")
-                    return true
-                }
-
-                tool != null && tool.score >= Support.supportRegionToolSimilarity -> {
-                    trace("support: friend rows visible, using built-in selection")
-                    return false
-                }
-
-                attempt < 2 -> 1.seconds.wait()
-            }
+    private fun selectSupportForStory() {
+        if (supportPrefs.selectionMode != SupportSelectionModeEnum.Preferred ||
+            supportPrefs.preferredServants.isEmpty()
+        ) {
+            selectSupportWithFallback()
+            return
         }
 
-        trace("support: guest probe inconclusive, using built-in selection")
-        return false
+        val found = try {
+            scanForPreferredSupport()
+        } catch (e: AutoBattle.BattleExitException) {
+            if (e.reason != AutoBattle.ExitReason.SupportSelectionPreferredNotSet) {
+                throw e
+            }
+            false
+        }
+
+        if (!found) {
+            trace("support: preferred not in list, taking first entry")
+            support.selectSupport(SupportSelectionModeEnum.First)
+        }
     }
 
-    private fun probeSupportList(): Pair<Match?, Match?> = useSameSnapIn {
-        val guest = locations.support.friendRegion
-            .findAll(images[Images.Guest], 0.45).firstOrNull()
+    private fun scanForPreferredSupport(): Boolean {
+        supportScreenRefresher.waitForSupportScreenToLoad()
+
+        var refreshes = 0
+        var sawFriendRow = false
+
+        while (true) {
+            var steps = 0
+            var bottomReached = false
+
+            while (steps < MAX_SCAN_STEPS) {
+                if (friendRowVisible()) sawFriendRow = true
+
+                when (preferredSelection.select()) {
+                    SupportSelectionResult.Done -> {
+                        trace("support: preferred selected")
+                        return true
+                    }
+
+                    SupportSelectionResult.ScrollDown -> {
+                        halfScrollDown()
+                        ++steps
+                        0.6.seconds.wait()
+                    }
+
+                    else -> {
+                        // EarlyRefresh/Refresh: the scrollbar says the
+                        // bottom is reached without a match.
+                        bottomReached = true
+                        break
+                    }
+                }
+            }
+
+            if (!bottomReached) {
+                trace("support: scan step cap reached")
+            }
+
+            // Refreshing only helps when friend rows exist at all; a
+            // guest-only list never gains the preferred servant.
+            if (!sawFriendRow || refreshes >= MAX_SUPPORT_REFRESHES) {
+                return false
+            }
+
+            ++refreshes
+            trace("support: refreshing list (pass ${refreshes + 1})")
+            supportScreenRefresher.refreshSupportList()
+            supportScreen.scrollToTop()
+            1.seconds.wait()
+        }
+    }
+
+    /** Whether any visible row is a friend row (setup button present). */
+    private fun friendRowVisible(): Boolean {
         val tool = locations.support.confirmSetupButtonRegion
             .findAll(images[Images.SupportConfirmSetupButton], 0.45).firstOrNull()
 
-        trace("support: probe guest=${guest?.score} tool=${tool?.score}")
+        return tool != null && tool.score >= Support.supportRegionToolSimilarity
+    }
 
-        // A guest marker below the built-in "in" similarity still
-        // counts as a guest sighting for the caller's decision.
-        val guestSeen = guest?.takeIf { it.score >= 0.8 }
+    /** Scroll the support list by half a screen so no row is skipped at a seam. */
+    private fun halfScrollDown() {
+        val start = locations.support.listSwipeStart
+        val end = locations.support.listSwipeEnd
 
-        guestSeen to tool
+        swiper(start, Location((start.x + end.x) / 2, (start.y + end.y) / 2))
     }
 
     // ------------------------------------------------------------------

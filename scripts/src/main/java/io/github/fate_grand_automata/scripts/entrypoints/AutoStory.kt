@@ -117,6 +117,9 @@ class AutoStory @Inject constructor(
         /** Half-screen scroll steps per pass of the preferred-support scan. */
         const val MAX_SCAN_STEPS = 24
 
+        /** Quest-start taps on an open panel before falling through to the node search. */
+        const val MAX_PANEL_TAP_ATTEMPTS = 2
+
         /** List refreshes allowed during the preferred-support scan. */
         const val MAX_SUPPORT_REFRESHES = 2
     }
@@ -143,6 +146,7 @@ class AutoStory @Inject constructor(
 
     /** Consecutive quest-select passes where nothing verified could be tapped. */
     private var noTargetStreak = 0
+    private var panelTapAttempts = 0
 
     private var lastState: StoryState? = null
 
@@ -765,10 +769,13 @@ class AutoStory @Inject constructor(
         // A quest panel is already open for some map spot: start it only
         // when it offers a Main Quest. Free Quest / Interlude panels belong
         // to neighbouring spots and must never be auto-started.
-        if (isMainQuestPanelOpen()) {
+        val panelOpen = isMainQuestPanelOpen()
+
+        if (panelOpen && panelTapAttempts < MAX_PANEL_TAP_ATTEMPTS) {
             // Click the uppermost quest, exactly like AutoBattle.menu().
             // The Main Quest banner (with the NEXT marker) is listed first.
-            trace("tap quest-start at ${locations.menuSelectQuestClick}")
+            ++panelTapAttempts
+            trace("tap quest-start at ${locations.menuSelectQuestClick} (attempt $panelTapAttempts)")
             locations.menuSelectQuestClick.click()
 
             questActive = true
@@ -783,6 +790,15 @@ class AutoStory @Inject constructor(
             }
 
             return
+        }
+
+        if (!panelOpen) {
+            panelTapAttempts = 0
+        } else {
+            // The start taps are not progressing (mis-detected panel or a
+            // tap point this panel layout does not accept): search for
+            // the node instead of tapping the same spot forever.
+            trace("panel: start taps not progressing, falling through to node search")
         }
 
         // No usable panel: tap the node carrying the NEXT marker. Its panel
@@ -809,9 +825,13 @@ class AutoStory @Inject constructor(
     /**
      * Whether the open quest panel offers the next Main Quest.
      *
-     * Primary check: the gold NEXT banner the panel draws on the Main
-     * Quest entry ([Images.StoryNextPanel], cut from a device screenshot;
-     * Free Quest / Interlude entries never carry it). OCR of the banner
+     * Primary check: [Images.StoryNextPanel] — the Main Quest entry's
+     * NEXT badge together with the blue card body around it. The badge
+     * alone also matches the floating map NEXT marker (observed on
+     * device: the check hit at 0.76 on the open map and the quest-start
+     * tap landed on empty map, looping); the card body never appears
+     * under the floating marker, and Free Quest / Interlude cards score
+     * below the threshold. OCR of the banner
      * labels ("Main Quest") is kept as a fallback. An OCR-only check
      * proved unreliable on device: when it missed, the finder kept
      * re-tapping the already-selected node and the run never proceeded.

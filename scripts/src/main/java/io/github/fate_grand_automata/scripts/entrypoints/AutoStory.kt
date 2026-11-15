@@ -138,8 +138,8 @@ class AutoStory @Inject constructor(
         if (!prefs.story.debugLog) return
 
         trail.appendLine(msg)
-        if (trail.length > 3000) {
-            trail.delete(0, trail.length - 3000)
+        if (trail.length > 6000) {
+            trail.delete(0, trail.length - 6000)
         }
     }
 
@@ -308,6 +308,9 @@ class AutoStory @Inject constructor(
                         }
                         1.seconds.wait()
                     } else {
+                        if (questActive) {
+                            trace("quest: wait cap reached, treating as unknown")
+                        }
                         handleUnknown()
                     }
                 }
@@ -323,7 +326,7 @@ class AutoStory @Inject constructor(
 
     private fun detectState(): StoryState = when {
         connectionRetry.needsToRetry() || withdraw.needsToWithdraw() -> StoryState.ERROR
-        battle.isIdle() -> StoryState.BATTLE
+        isInBattle() -> StoryState.BATTLE
         isInSupport() -> StoryState.SUPPORT_SELECT
         needsToStorySkip() -> StoryState.STORY
         isInResult() -> StoryState.RESULT
@@ -331,6 +334,30 @@ class AutoStory @Inject constructor(
         isInQuestList() -> StoryState.QUEST_SELECT
         locations.story.loadingCheckRegion.isBlack() -> StoryState.LOADING
         else -> StoryState.UNKNOWN
+    }
+
+    /**
+    /**
+     * Battle detection: the built-in idle check, plus a weaker match of
+     * the same template in the same region. A run was observed sitting
+     * on an idle turn-2 battle until the unknown-screen limit hit, even
+     * though offline replays of that screen score 0.92 — the on-device
+     * score apparently flickers under the default similarity at times.
+     * The weak match is traced so the trail shows when it was needed.
+     */
+    private fun isInBattle(): Boolean {
+        if (battle.isIdle()) {
+            return true
+        }
+
+        val weak = locations.battle.screenCheckRegion
+            .find(images[Images.BattleScreen], similarity = 0.65) != null
+
+        if (weak) {
+            trace("probe: battle screen matched weakly (>=0.65)")
+        }
+
+        return weak
     }
 
     /**

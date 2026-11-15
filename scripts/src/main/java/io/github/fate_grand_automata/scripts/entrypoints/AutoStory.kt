@@ -13,7 +13,7 @@ import io.github.fate_grand_automata.scripts.modules.Refill
 import io.github.fate_grand_automata.scripts.modules.StoryMapFinder
 import io.github.fate_grand_automata.scripts.modules.Support
 import io.github.fate_grand_automata.scripts.modules.SupportScreen
-import io.github.fate_grand_automata.scripts.modules.SupportScreenRefresher
+import io.github.fate_grand_automata.scripts.modules.SupportClassPicker
 import io.github.fate_grand_automata.scripts.supportSelection.PreferredSupportSelection
 import io.github.fate_grand_automata.scripts.supportSelection.SupportSelectionResult
 import io.github.fate_grand_automata.scripts.modules.Withdraw
@@ -62,7 +62,7 @@ class AutoStory @Inject constructor(
     private val refill: Refill,
     private val storyMapFinder: StoryMapFinder,
     private val supportScreen: SupportScreen,
-    private val supportScreenRefresher: SupportScreenRefresher,
+    private val supportClassPicker: SupportClassPicker,
     private val preferredSelection: PreferredSupportSelection,
     private val swiper: Swiper,
     private val supportPrefs: ISupportPreferences
@@ -507,6 +507,23 @@ class AutoStory @Inject constructor(
             return
         }
 
+        // The load wait is done locally on purpose: the built-in wait
+        // (inside selectSupport / the list refresher) also gates on the
+        // ALL-tab icon being recognised, which can stay false for a
+        // long time on some devices and freeze the run on this screen
+        // before anything moves — the observed "stuck on the support
+        // screen" failure. isListLoaded() only needs the rows
+        // themselves. If the list genuinely never loads, the built-in
+        // flow (whose wait also handles dialogs) takes over.
+        if (!waitForSupportList(30)) {
+            trace("support: list load timed out, using built-in selection")
+            selectSupportWithFallback()
+            return
+        }
+
+        supportClassPicker.selectSupportClass()
+        waitForSupportList(15)
+
         val found = try {
             scanForPreferredSupport()
         } catch (e: AutoBattle.BattleExitException) {
@@ -523,8 +540,6 @@ class AutoStory @Inject constructor(
     }
 
     private fun scanForPreferredSupport(): Boolean {
-        supportScreenRefresher.waitForSupportScreenToLoad()
-
         var refreshes = 0
         var sawFriendRow = false
 
@@ -544,6 +559,9 @@ class AutoStory @Inject constructor(
                     SupportSelectionResult.ScrollDown -> {
                         halfScrollDown()
                         ++steps
+                        if (steps % 5 == 1) {
+                            trace("support: scan step $steps, no match yet")
+                        }
                         0.6.seconds.wait()
                     }
 
@@ -568,10 +586,42 @@ class AutoStory @Inject constructor(
 
             ++refreshes
             trace("support: refreshing list (pass ${refreshes + 1})")
-            supportScreenRefresher.refreshSupportList()
+            refreshListOnce()
             supportScreen.scrollToTop()
+            waitForSupportList(15)
+        }
+    }
+
+    /**
+     * Poll the built-in list-loaded check (rows present, by the Guest
+     * marker / setup buttons / not-found notice) for up to
+     * [timeoutSeconds] seconds.
+     */
+    private fun waitForSupportList(timeoutSeconds: Int): Boolean {
+        repeat(timeoutSeconds) {
+            if (supportScreen.isListLoaded()) return true
             1.seconds.wait()
         }
+
+        return supportScreen.isListLoaded()
+    }
+
+    /**
+     * Refresh the support list with the built-in screen actions,
+     * waiting (bounded) for the refresh button to leave its in-game
+     * cooldown first — tapping it while unavailable would leave the
+     * follow-up confirm tap landing on a list row.
+     */
+    private fun refreshListOnce() {
+        repeat(15) {
+            if (supportScreen.refreshAvailable()) {
+                supportScreen.refresh()
+                return
+            }
+            1.seconds.wait()
+        }
+
+        trace("support: refresh button never became available")
     }
 
     /** Whether any visible row is a friend row (setup button present). */

@@ -13,6 +13,7 @@ internal class AutoStoryPrefs(
     override val maxQuests by prefs.autoStoryMaxQuests
     override val stopOnApOut by prefs.autoStoryStopOnApOut
     override val stopOnDefeat by prefs.autoStoryStopOnDefeat
+    override val useLeylineStoneContinue by prefs.autoStoryUseLeylineStone
     override val stopOnError by prefs.autoStoryStopOnError
     override val actionInterval by prefs.autoStoryActionIntervalMs.map { it.milliseconds }
     override val debugLog by prefs.autoStoryDebugLog

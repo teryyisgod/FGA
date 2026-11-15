@@ -43,6 +43,7 @@ class PrefsCore @Inject constructor(
     val autoStoryMaxQuests = maker.int("auto_story_max_quests", 20)
     val autoStoryStopOnApOut = maker.bool("auto_story_stop_on_ap_out", true)
     val autoStoryStopOnDefeat = maker.bool("auto_story_stop_on_defeat", true)
+    val autoStoryUseLeylineStone = maker.bool("auto_story_use_leyline_stone")
     val autoStoryStopOnError = maker.bool("auto_story_stop_on_error", true)
     val autoStoryActionIntervalMs = maker.int("auto_story_action_interval_ms", 500)
     val autoStoryDebugLog = maker.bool("auto_story_debug_log")

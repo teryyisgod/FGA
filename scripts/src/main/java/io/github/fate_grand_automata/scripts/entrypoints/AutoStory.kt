@@ -100,12 +100,18 @@ class AutoStory @Inject constructor(
 
         /** Similarity for the "tap to continue" announcement prompt. */
         const val NOTICE_SIMILARITY = 0.7
+        /** Max Leyline Stone continues per run (opt-in setting), so an unbeatable boss cannot burn every stone. */
+        const val MAX_LEYLINE_CONTINUES = 3
+
+        /** Similarity for the Leyline Stone button caption on the defeat dialog. */
+        const val LEYLINE_BUTTON_SIMILARITY = 0.8
     }
 
     private var completedQuests = 0
 
     /** A quest was tapped in the quest list and has not finished yet. */
     private var questActive = false
+    private var leylineContinuesUsed = 0
 
     /** Battle, story or result was seen since the current quest was selected. */
     private var questProgressed = false
@@ -538,6 +544,16 @@ class AutoStory @Inject constructor(
     private fun handleError() {
         when {
             withdraw.needsToWithdraw() -> {
+                if (prefs.story.useLeylineStoneContinue &&
+                    leylineContinuesUsed < MAX_LEYLINE_CONTINUES &&
+                    tryLeylineStoneContinue()
+                ) {
+                    // The battle resumes with the party revived; the
+                    // state machine re-detects the battle screen.
+                    ++leylineContinuesUsed
+                    return
+                }
+
                 if (prefs.story.stopOnDefeat) {
                     throw StoryExitException(ExitReason.Defeated)
                 }
@@ -551,6 +567,31 @@ class AutoStory @Inject constructor(
 
             connectionRetry.needsToRetry() -> connectionRetry.retry()
         }
+    }
+
+    /**
+     * Spend one Leyline Stone to continue the current battle: tap the
+     * stone button on the defeat dialog, then confirm. Only the stone
+     * button is ever tapped — Command Spells and Saint Quartz are
+     * never used. Returns false (and taps nothing) when the stone
+     * button is not on screen, e.g. when no stones are left.
+     */
+    private fun tryLeylineStoneContinue(): Boolean {
+        val button = locations.story.leylineStoneRegion
+            .find(images[Images.LeylineStone], LEYLINE_BUTTON_SIMILARITY)
+            ?: run {
+                trace("defeat: leyline stone button not found")
+                return false
+            }
+
+        trace("defeat: using leyline stone (attempt ${leylineContinuesUsed + 1})")
+        button.region.click()
+        1.seconds.wait()
+
+        locations.story.leylineConfirmClick.click()
+        3.seconds.wait()
+
+        return true
     }
 
     private fun handleStory() {

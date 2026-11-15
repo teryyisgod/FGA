@@ -161,6 +161,12 @@ fun LazyListScope.battleGroup(
     }
 
     item {
+        prefs.autoStoryUseLeylineStone.SwitchPreference(
+            title = stringResource(R.string.p_auto_story_use_leyline_stone)
+        )
+    }
+
+    item {
         prefs.autoStoryStopOnError.SwitchPreference(
             title = stringResource(R.string.p_auto_story_stop_on_error)
         )

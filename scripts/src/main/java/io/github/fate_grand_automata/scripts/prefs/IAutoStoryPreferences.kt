@@ -24,6 +24,9 @@ interface IAutoStoryPreferences {
     /** Stop when a battle is lost (withdraw screen) instead of withdrawing and continuing. */
     val stopOnDefeat: Boolean
 
+    /** On defeat, continue the battle by spending a Leyline Stone (never Command Spells or Saint Quartz). Capped per run in the entrypoint. */
+    val useLeylineStoneContinue: Boolean
+
     /** Stop when an unrecognised screen persists beyond the retry limit. */
     val stopOnError: Boolean
 

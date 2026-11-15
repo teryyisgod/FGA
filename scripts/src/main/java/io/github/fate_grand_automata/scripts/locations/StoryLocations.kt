@@ -30,6 +30,19 @@ class StoryLocations @Inject constructor(
     val startQuestRegion = Region(-780, -450, 720, 400).xFromRight().yFromBottom()
 
     /**
+     * Region where the "Use Leyline Stone" button of the defeat /
+     * continue dialog is expected (leftmost of the three continue
+     * buttons). The [io.github.fate_grand_automata.scripts.Images.LeylineStone]
+     * template (the button's caption, cut from a device screenshot;
+     * 1.00 on the source screen, <=0.66 on the neighbouring buttons)
+     * is matched inside it.
+     */
+    val leylineStoneRegion = Region(-880, 520, 470, 170).xFromCenter()
+
+    /** The confirm ("決定") button of the Leyline Stone continue dialog. */
+    val leylineConfirmClick = Location(430, 830).xFromCenter()
+
+    /**
      * Full story-map area scanned for the "NEXT" marker of the next quest
      * node. Margins stay small on purpose: southern/northern edge nodes are
      * legitimate targets — an earlier version cut 420px off the bottom and

@@ -337,7 +337,6 @@ class AutoStory @Inject constructor(
     }
 
     /**
-    /**
      * Battle detection: the built-in idle check, plus a weaker match of
      * the same template in the same region. A run was observed sitting
      * on an idle turn-2 battle until the unknown-screen limit hit, even

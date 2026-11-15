@@ -4,6 +4,7 @@ import io.github.fate_grand_automata.scripts.IFgoAutomataApi
 import io.github.fate_grand_automata.scripts.Images
 import io.github.fate_grand_automata.scripts.ScriptLog
 import io.github.fate_grand_automata.scripts.ScriptNotify
+import io.github.fate_grand_automata.scripts.enums.SupportSelectionModeEnum
 import io.github.fate_grand_automata.scripts.enums.StoryState
 import io.github.fate_grand_automata.scripts.modules.Battle
 import io.github.fate_grand_automata.scripts.modules.ConnectionRetry
@@ -251,12 +252,21 @@ class AutoStory @Inject constructor(
                     trace("support: built-in selection, class=${supportPrefs.supportClass}")
                     try {
                         support.selectSupport()
-                    } catch (e: Throwable) {
-                        // Traced, then rethrown unchanged: the failure
-                        // inside the built-in selection was invisible
-                        // because the exit line sat above the trail.
-                        trace("support: threw ${e.javaClass.simpleName}: ${e.message}")
-                        throw e
+                    } catch (e: AutoBattle.BattleExitException) {
+                        // Device evidence: the built-in selection throws
+                        // here (null message; the class name is obfuscated
+                        // in release builds, so trace the reason instead).
+                        trace("support: BattleExit reason=${e.reason}")
+                        if (e.reason != AutoBattle.ExitReason.SupportSelectionManual) {
+                            throw e
+                        }
+
+                        // The preferred search gave up. A story quest
+                        // always offers at least the pinned Guest Servant,
+                        // so take the first entry and keep going instead
+                        // of ending the run on the selection screen.
+                        trace("support: preferred search gave up, taking first entry")
+                        support.selectSupport(SupportSelectionModeEnum.First)
                     }
                     trace("support: selected")
 

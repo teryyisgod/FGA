@@ -141,6 +141,7 @@ class StoryMapFinder @Inject constructor(
             1.seconds.wait()
         }
         searchCurrentView(WHOLE_MAP_SCALES)?.let { return it }
+        searchWholeMapPans()?.let { return it }
 
         // Sweep back in step by step, searching at every zoom level: the
         // deepest zoom-out renders the marker smaller than any template,
@@ -159,6 +160,39 @@ class StoryMapFinder @Inject constructor(
         return null
     }
 
+    /**
+     * Pan the zoomed-out map up/down/left/right, searching after each
+     * pan: long or wide chapter maps extend past the screen even at
+     * the deepest zoom-out (user request). Template matching only (no
+     * OCR): at this zoom the marker text is too small for OCR anyway,
+     * and four OCR grids would take minutes. Each pan returns to the
+     * centre view so the pinch-in phase starts from the same place.
+     */
+    private fun searchWholeMapPans(): Location? {
+        val pans = listOf(
+            "top" to (0 to 300),
+            "bottom" to (0 to -300),
+            "left" to (500 to 0),
+            "right" to (-500 to 0)
+        )
+
+        for ((name, delta) in pans) {
+            tracer?.invoke("zoom: pan to $name")
+            panMap(delta.first, delta.second)
+            findNextMarker(WHOLE_MAP_SCALES, useOcr = false)?.let { return it }
+            panMap(-delta.first, -delta.second)
+        }
+
+        return null
+    }
+
+    /** Drag the map by twice the given half-distance around the centre. */
+    private fun panMap(dx: Int, dy: Int) {
+        val c = locations.story.pinchCenter
+        swipe(Location(c.x - dx, c.y - dy), Location(c.x + dx, c.y + dy))
+        0.7.seconds.wait()
+    }
+
     private fun searchCurrentView(scales: List<Double> = MARKER_SCALES): Location? {
         repeat(MAX_MAP_SCROLLS + 1) { attempt ->
             findNextMarker(scales)?.let { return it }
@@ -175,7 +209,10 @@ class StoryMapFinder @Inject constructor(
         return null
     }
 
-    private fun findNextMarker(scales: List<Double> = MARKER_SCALES): Location? {
+    private fun findNextMarker(
+        scales: List<Double> = MARKER_SCALES,
+        useOcr: Boolean = true
+    ): Location? {
         val area = locations.story.mapScanRegion
 
         // Next node on the chapter map itself. The marker's rendering
@@ -219,7 +256,7 @@ class StoryMapFinder @Inject constructor(
             null
         }
 
-        return found ?: findNextMarkerByOcr()
+        return found ?: if (useOcr) findNextMarkerByOcr() else null
     }
 
     /** Single-scale match of [base] in [area] at the marker similarity. */

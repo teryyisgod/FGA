@@ -475,6 +475,14 @@ class AutoStory @Inject constructor(
     }
 
     private fun handleResult() {
+        // The drops screen only advances through its bottom-right Next
+        // button; the generic result tap lands below that button and
+        // never advances it (observed on device: the run sat on the
+        // loot screen). The farming flow's drops handling clicks the
+        // MatRewards search region, whose centre is on the button —
+        // do the same, then use the generic taps for the other result
+        // screens (bond, master EXP, ...), which advance on any tap.
+        locations.resultMatRewardsRegion.click()
         locations.resultClick.click(times = 5)
     }
 

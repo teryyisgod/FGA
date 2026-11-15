@@ -518,12 +518,17 @@ class AutoStory @Inject constructor(
         when {
             // Quest-start confirmation ("クエストを開始しますか？"):
             // quests whose party is formed right before battle show
-            // this dialog after the quest entry is tapped. Only while
-            // a quest is in flight, so the start position is never
-            // tapped on unrelated screens.
-            questActive &&
-                images[Images.QuestStartConfirm] in locations.story.questStartConfirmRegion -> {
+            // this dialog after the quest entry is tapped. Not gated
+            // on questActive: the template match is unambiguous
+            // (1.00 on this dialog, <=0.30 elsewhere), and the gate
+            // left the dialog untouched whenever the run had not
+            // passed through the panel path itself (script restarted
+            // with the dialog already up, dialog raised by a manual
+            // tap, ...), stalling the run on it (observed on device
+            // 2026-11-15 in Camelot).
+            images[Images.QuestStartConfirm] in locations.story.questStartConfirmRegion -> {
                 trace("dialog: quest-start confirm, tapping start")
+                questActive = true
                 locations.story.questStartConfirmClick.click()
                 true
             }
@@ -888,6 +893,14 @@ class AutoStory @Inject constructor(
         if (next != null) {
             trace("tap node at $next")
             next.click()
+
+            // The quest is in flight from this tap on (its panel opens
+            // next): the panel path above already marks this, the node
+            // path must too, or quest-gated handling (in-quest waits,
+            // dialogs) stays disarmed for a quest the script started.
+            questActive = true
+            questProgressed = false
+            questCounted = false
             noTargetStreak = 0
             2.seconds.wait()
             return
@@ -973,6 +986,9 @@ class AutoStory @Inject constructor(
             val next = storyMapFinder.findNextQuest()
             if (next != null) {
                 next.click()
+                questActive = true
+                questProgressed = false
+                questCounted = false
                 unknownStreak = 0
                 2.seconds.wait()
                 return

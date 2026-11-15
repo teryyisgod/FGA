@@ -42,7 +42,7 @@ class StoryMapFinder @Inject constructor(
         const val MAX_MAP_SCROLLS = 3
 
         /** Pinch-out gestures used to reach the whole-map zoom level. */
-        const val ZOOM_OUT_PINCHES = 2
+        const val ZOOM_OUT_PINCHES = 3
 
         /** Pinch-in steps swept (with a search after each) on the way back in. */
         const val ZOOM_IN_STEPS = 2
@@ -68,6 +68,14 @@ class StoryMapFinder @Inject constructor(
 
         /** Smaller ladder for fixed-scale UI markers (chapter list, panel). */
         val UI_MARKER_SCALES = listOf(1.0, 0.95, 1.05, 0.9, 1.1)
+
+        /**
+         * Ladder for the whole-map phase: at the deepest zoom-out the
+         * marker renders far below the normal ladder's 0.85 floor, so
+         * the small scales are tried first there, then the normal ones
+         * (in case the pinch did not change the zoom after all).
+         */
+        val WHOLE_MAP_SCALES = listOf(0.75, 0.65, 0.55) + MARKER_SCALES
     }
 
     /** Diagnostic sink set by the entry point when the debug log is on. */
@@ -123,7 +131,8 @@ class StoryMapFinder @Inject constructor(
 
         // Zoom fully out and search the whole map.
         tracer?.invoke("search: pinch out")
-        repeat(ZOOM_OUT_PINCHES) {
+        repeat(ZOOM_OUT_PINCHES) { index ->
+            tracer?.invoke("zoom: pinch out ${index + 1}/$ZOOM_OUT_PINCHES")
             pincher(
                 locations.story.pinchCenter,
                 locations.story.pinchStartDistance,
@@ -131,12 +140,13 @@ class StoryMapFinder @Inject constructor(
             )
             1.seconds.wait()
         }
-        searchCurrentView()?.let { return it }
+        searchCurrentView(WHOLE_MAP_SCALES)?.let { return it }
 
         // Sweep back in step by step, searching at every zoom level: the
         // deepest zoom-out renders the marker smaller than any template,
         // but the sweep passes through the levels the templates cover.
-        repeat(ZOOM_IN_STEPS) {
+        repeat(ZOOM_IN_STEPS) { index ->
+            tracer?.invoke("zoom: pinch in step ${index + 1}/$ZOOM_IN_STEPS")
             pincher(
                 locations.story.pinchCenter,
                 locations.story.pinchEndDistance,
@@ -149,9 +159,9 @@ class StoryMapFinder @Inject constructor(
         return null
     }
 
-    private fun searchCurrentView(): Location? {
+    private fun searchCurrentView(scales: List<Double> = MARKER_SCALES): Location? {
         repeat(MAX_MAP_SCROLLS + 1) { attempt ->
-            findNextMarker()?.let { return it }
+            findNextMarker(scales)?.let { return it }
 
             if (attempt < MAX_MAP_SCROLLS) {
                 swipe(
@@ -165,7 +175,7 @@ class StoryMapFinder @Inject constructor(
         return null
     }
 
-    private fun findNextMarker(): Location? {
+    private fun findNextMarker(scales: List<Double> = MARKER_SCALES): Location? {
         val area = locations.story.mapScanRegion
 
         // Next node on the chapter map itself. The marker's rendering
@@ -188,7 +198,7 @@ class StoryMapFinder @Inject constructor(
         // scale for every variant first also finds the common case in
         // a handful of matches.
         val found = useSameSnapIn {
-            for (scale in MARKER_SCALES) {
+            for (scale in scales) {
                 for ((image, nodeOffset) in variants) {
                     findAtScale(area, images[image], scale)?.let { match ->
                         tracer?.invoke(

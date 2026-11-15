@@ -157,8 +157,12 @@ class StoryLocations @Inject constructor(
     /** Centre of the pinch gestures used to change the story map's zoom level. */
     val pinchCenter = Location(0, 700).xFromCenter()
 
-    /** Finger gap (script px) at the start of a pinch: wide open. */
-    val pinchStartDistance = 760
+    /**
+     * Finger gap (script px) at the start of a pinch: wide open. Widened
+     * from 760 to 1200: the smaller gesture did not reliably drive the
+     * map to its whole-map zoom on device.
+     */
+    val pinchStartDistance = 1200
 
     /** Finger gap (script px) at the end of a zoom-out pinch: nearly closed. */
     val pinchEndDistance = 140

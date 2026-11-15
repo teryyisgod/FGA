@@ -147,6 +147,8 @@ class AutoStory @Inject constructor(
     /** Consecutive quest-select passes where nothing verified could be tapped. */
     private var noTargetStreak = 0
     private var panelTapAttempts = 0
+    private var prevState: StoryState? = null
+    private var resultStreak = 0
 
     private var lastState: StoryState? = null
 
@@ -274,7 +276,12 @@ class AutoStory @Inject constructor(
                 messages.log(ScriptLog.AutoStoryState(state.name, completedQuests))
                 trace("state=$state")
             }
+            prevState = lastState
             lastState = state
+
+            if (state != StoryState.RESULT) {
+                resultStreak = 0
+            }
 
             when (state) {
                 StoryState.ERROR -> handleError()
@@ -302,12 +309,38 @@ class AutoStory @Inject constructor(
                 }
 
                 StoryState.RESULT -> {
-                    questProgressed = true
-                    countCompletionIfNeeded()
-                    handleResult()
+                    // A result screen must be seen twice in a row before
+                    // it is counted and tapped through: a one-frame
+                    // flicker of a result template during a battle
+                    // animation otherwise completes the quest on paper,
+                    // disarms the in-quest protections and leaves the
+                    // live battle to the map search (observed on device:
+                    // finder pinching/OCR-searching over a wave-3
+                    // battle). A genuine result screen persists, so it
+                    // is handled from the second pass on.
+                    if (++resultStreak < 2) {
+                        trace("result: confirming (first sighting)")
+                        1.seconds.wait()
+                    } else {
+                        questProgressed = true
+                        countCompletionIfNeeded()
+                        handleResult()
+                    }
                 }
 
-                StoryState.QUEST_SELECT -> selectQuest()
+                StoryState.QUEST_SELECT -> {
+                    // A battle never leads straight to the quest list
+                    // (it ends via the result sequence), so this
+                    // transition is a detector flicker during the
+                    // battle: ignore it instead of running the map
+                    // search over the live battle.
+                    if (prevState == StoryState.BATTLE) {
+                        trace("quest-select: ignored (detector flicker during battle)")
+                        1.seconds.wait()
+                    } else {
+                        selectQuest()
+                    }
+                }
 
                 StoryState.MAP,
                 StoryState.LOADING -> {
@@ -913,7 +946,24 @@ class AutoStory @Inject constructor(
      * searches for the "NEXT" node marker (template first, OCR fallback).
      * Only when that also fails repeatedly do we treat the screen as an error.
      */
+    /** Whether any screen belonging to an in-flight quest is visible. */
+    private fun isAnyQuestScreenVisible(): Boolean = useSameSnapIn {
+        isInBattle() || isInResult() || isInSupport() || isInPartyConfirm() || needsToStorySkip()
+    }
+
     private fun handleUnknown() {
+        // Never search the map over a quest screen. However the loop
+        // got here (a flickering detector, an exhausted in-quest wait),
+        // if a battle / result / support / party / story screen is
+        // actually visible, the quest is still in flight: wait and let
+        // the normal detection pick it up again.
+        if (isAnyQuestScreenVisible()) {
+            trace("unknown: quest screen visible, waiting instead of searching")
+            unknownStreak = 0
+            3.seconds.wait()
+            return
+        }
+
         ++unknownStreak
 
         if (prefs.story.autoSelectQuest && unknownStreak % MAP_SEARCH_EVERY == 0) {

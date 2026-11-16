@@ -225,7 +225,8 @@ class StoryMapFinder @Inject constructor(
             Images.StoryNext to locations.story.storyNodeOffset,
             Images.StoryNextBright to locations.story.storyNodeOffset,
             Images.StoryNextWide to locations.story.storyNodeOffset,
-            Images.StoryNextGold to locations.story.goldNodeOffset
+            Images.StoryNextGold to locations.story.goldNodeOffset,
+            Images.StoryNextGoldBright to locations.story.goldBrightNodeOffset
         )
 
         // One shared screenshot for the whole sweep, scales outermost:

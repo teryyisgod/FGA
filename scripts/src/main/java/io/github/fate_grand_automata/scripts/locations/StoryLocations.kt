@@ -108,6 +108,8 @@ class StoryLocations @Inject constructor(
      * Measured on the E Pluribus Unum reference screenshot.
      */
     val goldNodeOffset = Location(12, 163)
+    /** Node offset for the bright-background gold NEXT (e.g. Camelot desert): the beam is longer there; measured on the user's screenshot (2026-11-16). */
+    val goldBrightNodeOffset = Location(-14, 245)
 
     /**
      * Bottom-centre strip where full-screen announcements (e.g. Mash's

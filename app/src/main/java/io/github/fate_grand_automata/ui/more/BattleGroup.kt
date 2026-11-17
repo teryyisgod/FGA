@@ -167,6 +167,12 @@ fun LazyListScope.battleGroup(
     }
 
     item {
+        prefs.autoStoryAiObservationLog.SwitchPreference(
+            title = stringResource(R.string.p_auto_story_ai_observation_log)
+        )
+    }
+
+    item {
         prefs.autoStoryStopOnError.SwitchPreference(
             title = stringResource(R.string.p_auto_story_stop_on_error)
         )

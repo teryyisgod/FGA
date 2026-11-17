@@ -10,6 +10,12 @@ limit is reached.
 1. In **More Options → Battle**, turn on **Auto Story mode** and adjust the
    Auto Story settings (auto-skip, auto quest selection, max consecutive
    quests, stop conditions, action interval, debug log).
+   The **"log battle data for AI (JSON)"** setting additionally captures a
+   JSON snapshot of the battle state at battle start and at every turn's
+   decision point (dealt cards, queued NPs, locked target, deployed
+   servants; values FGA cannot read, such as HP, are `null`). Snapshots go
+   to Logcat (`BattleObservation ...`) and are attached to the exit dialog.
+   Capture is observation-only and never changes a battle decision.
 2. Open FGO on the story quest list (or the story map) and press FGA's play
    button. Because the start screens are shared with farming, screen
    detection reports "Battle"; with the setting above on, FGA starts

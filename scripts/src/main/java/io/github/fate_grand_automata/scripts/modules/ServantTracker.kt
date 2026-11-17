@@ -22,6 +22,9 @@ class ServantTracker @Inject constructor(
     private val _deployed = mutableMapOf<FieldSlot, TeamSlot>()
     val deployed: Map<FieldSlot, TeamSlot> = _deployed
 
+    /** The team slot of the support servant, once detected on the field. */
+    val supportTeamSlot: TeamSlot? get() = supportSlot
+
     fun nextRun() {
         servantQueue.clear()
         servantQueue.addAll(

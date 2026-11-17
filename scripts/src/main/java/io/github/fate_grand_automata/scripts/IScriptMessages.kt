@@ -46,6 +46,11 @@ sealed class ScriptLog {
         val state: String,
         val completedQuests: Int
     ) : ScriptLog()
+
+    /** One battle observation as a JSON line (AI battle data capture). */
+    class BattleObservation(
+        val json: String
+    ) : ScriptLog()
 }
 
 interface IScriptMessages {

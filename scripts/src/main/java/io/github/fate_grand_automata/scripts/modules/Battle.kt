@@ -3,9 +3,12 @@ package io.github.fate_grand_automata.scripts.modules
 import io.github.fate_grand_automata.scripts.IFgoAutomataApi
 import io.github.fate_grand_automata.scripts.Images
 import io.github.fate_grand_automata.scripts.entrypoints.AutoBattle
+import io.github.fate_grand_automata.scripts.models.BattleObservation
 import io.github.fate_grand_automata.scripts.models.NPUsage
 import io.github.fate_grand_automata.scripts.models.ParsedCard
 import io.github.fate_grand_automata.scripts.models.Skill
+import io.github.fate_grand_automata.scripts.models.label
+import io.github.fate_grand_automata.scripts.models.toFieldSlot
 import io.github.fate_grand_automata.scripts.models.battle.BattleState
 import io.github.fate_grand_automata.scripts.prefs.IBattleConfig
 import io.github.lib_automata.dagger.ScriptScope
@@ -26,6 +29,15 @@ class Battle @Inject constructor(
     private val stageTracker: StageTracker,
     private val autoChooseTarget: AutoChooseTarget
 ) : IFgoAutomataApi by api {
+    /**
+     * Optional sink for battle observations (AI battle data capture).
+     * Null — the default, and always the case for farming — disables
+     * capture entirely; installing one never changes any decision.
+     */
+    var battleObserver: BattleObserver? = null
+
+    private var battleStartObservationPending = true
+
     init {
         prefs.stopAfterThisRun = false
         state.markStartTime()
@@ -34,6 +46,7 @@ class Battle @Inject constructor(
     }
 
     fun resetState() {
+        battleStartObservationPending = true
         // Don't increment no. of runs if we're just clicking on quest again and again
         // This can happen due to lags introduced during some events
         if (state.stage != -1) {
@@ -72,6 +85,11 @@ class Battle @Inject constructor(
 
         onTurnStarted()
 
+        if (battleStartObservationPending) {
+            battleStartObservationPending = false
+            emitObservation(BattleObservation.EVENT_BATTLE_START, emptyList(), null)
+        }
+
         if (battleConfig.addRaidTurnDelay){
             battleConfig.raidTurnDelaySeconds.seconds.wait()
         }
@@ -85,9 +103,55 @@ class Battle @Inject constructor(
             .takeUnless { shouldShuffle(it, npUsage) }
             ?: shuffleCards()
 
+        // Decision point: the dealt cards are known, nothing has been
+        // clicked yet. Observation only — the choice below is unchanged.
+        emitObservation(BattleObservation.EVENT_TURN_DECISION, cards, npUsage)
+
         card.clickCommandCards(cards, npUsage)
 
         0.5.seconds.wait()
+    }
+
+    /**
+     * Builds and forwards one observation. Wrapped so a capture
+     * failure can never break the battle it observes.
+     */
+    private fun emitObservation(event: String, cards: List<ParsedCard>, npUsage: NPUsage?) {
+        val observer = battleObserver ?: return
+
+        runCatching {
+            observer.onObservation(
+                BattleObservation(
+                    event = event,
+                    stage = state.stage + 1,
+                    turn = state.turn + 1,
+                    cards = cards.map { card ->
+                        BattleObservation.CardEntry(
+                            index = card.card.index,
+                            type = card.type.name,
+                            affinity = card.affinity.name,
+                            servant = card.servant.label(),
+                            fieldSlot = card.fieldSlot?.label(),
+                            stunned = card.isStunned
+                        )
+                    },
+                    npQueued = npUsage?.nps
+                        ?.map { it.toFieldSlot().label() }
+                        ?: emptyList(),
+                    cardsBeforeNp = npUsage?.cardsBeforeNP,
+                    chosenTarget = state.chosenTarget?.label(),
+                    servants = servantTracker.deployed.entries
+                        .sortedBy { it.key.position }
+                        .map { (fieldSlot, teamSlot) ->
+                            BattleObservation.ServantEntry(
+                                fieldSlot = fieldSlot.label(),
+                                teamSlot = teamSlot.label(),
+                                isSupport = teamSlot == servantTracker.supportTeamSlot
+                            )
+                        }
+                )
+            )
+        }
     }
 
     private fun shouldShuffle(cards: List<ParsedCard>, npUsage: NPUsage): Boolean {

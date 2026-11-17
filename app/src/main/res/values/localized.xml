@@ -244,6 +244,7 @@ Copy or rename it if you want to keep it."</string>
     <string name="p_auto_story_stop_on_ap_out">"Auto Story: stop when AP runs out"</string>
     <string name="p_auto_story_stop_on_defeat">"Auto Story: stop on defeat"</string>
     <string name="p_auto_story_use_leyline_stone">"Auto Story: continue with Leyline Stone"</string>
+    <string name="p_auto_story_ai_observation_log">"Auto Story: log battle data for AI (JSON)"</string>
     <string name="p_auto_story_stop_on_error">"Auto Story: stop on unrecognised screen"</string>
     <string name="p_auto_story_action_interval">"Auto Story: action interval (ms)"</string>
     <string name="p_auto_story_debug_log">"Auto Story: debug log (state transitions)"</string>

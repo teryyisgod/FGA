@@ -17,4 +17,5 @@ internal class AutoStoryPrefs(
     override val stopOnError by prefs.autoStoryStopOnError
     override val actionInterval by prefs.autoStoryActionIntervalMs.map { it.milliseconds }
     override val debugLog by prefs.autoStoryDebugLog
+    override val aiObservationLog by prefs.autoStoryAiObservationLog
 }

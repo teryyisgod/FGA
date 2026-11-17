@@ -315,6 +315,7 @@
     <string name="p_auto_story_stop_on_ap_out">"AP不足時に停止"</string>
     <string name="p_auto_story_stop_on_defeat">"敗北時に停止"</string>
     <string name="p_auto_story_use_leyline_stone">"霊脈石でコンティニューする"</string>
+    <string name="p_auto_story_ai_observation_log">"AI用に戦闘データを記録（JSON）"</string>
     <string name="p_auto_story_stop_on_error">"認識できない画面で停止"</string>
     <string name="p_auto_story_action_interval">"操作間隔 (ms)"</string>
     <string name="p_auto_story_debug_log">"デバッグログ保存（状態遷移）"</string>

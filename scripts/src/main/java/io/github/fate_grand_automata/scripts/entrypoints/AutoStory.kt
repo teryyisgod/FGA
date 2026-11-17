@@ -7,6 +7,7 @@ import io.github.fate_grand_automata.scripts.ScriptNotify
 import io.github.fate_grand_automata.scripts.enums.SupportSelectionModeEnum
 import io.github.fate_grand_automata.scripts.enums.StoryState
 import io.github.fate_grand_automata.scripts.modules.Battle
+import io.github.fate_grand_automata.scripts.modules.BattleObservationLogger
 import io.github.fate_grand_automata.scripts.modules.ConnectionRetry
 import io.github.fate_grand_automata.scripts.modules.PartySelection
 import io.github.fate_grand_automata.scripts.modules.Refill
@@ -65,7 +66,8 @@ class AutoStory @Inject constructor(
     private val supportClassPicker: SupportClassPicker,
     private val preferredSelection: PreferredSupportSelection,
     private val swiper: Swiper,
-    private val supportPrefs: ISupportPreferences
+    private val supportPrefs: ISupportPreferences,
+    private val observationLogger: BattleObservationLogger
 ) : EntryPoint(exitManager), IFgoAutomataApi by api {
 
     sealed class ExitReason(val cause: Exception? = null) {
@@ -169,20 +171,39 @@ class AutoStory @Inject constructor(
         }
     }
 
-    private fun withTrail(reason: ExitReason): ExitException =
-        if (prefs.story.debugLog && reason !is ExitReason.Unexpected) {
+    /** Recorded battle-observation JSON lines, when that setting is on. */
+    private fun observationHistory(): String =
+        if (prefs.story.aiObservationLog) observationLogger.historyText() else ""
+
+    private fun withTrail(reason: ExitReason): ExitException {
+        val observations = observationHistory()
+
+        return if ((prefs.story.debugLog || observations.isNotBlank()) && reason !is ExitReason.Unexpected) {
             // Keep the original exit reason readable in the dialog: the
             // trail alone cannot distinguish a user abort from a failure.
-            ExitException(
-                ExitReason.Unexpected(
-                    IllegalStateException("DEBUG TRAIL:\n$trail\nEXIT=${reason.javaClass.simpleName}")
-                )
-            )
+            val body = buildString {
+                if (prefs.story.debugLog) {
+                    append("DEBUG TRAIL:\n").append(trail).append('\n')
+                }
+                if (observations.isNotBlank()) {
+                    append("BATTLE OBSERVATIONS:\n").append(observations)
+                }
+                append("EXIT=").append(reason.javaClass.simpleName)
+            }
+
+            ExitException(ExitReason.Unexpected(IllegalStateException(body)))
         } else {
             ExitException(reason)
         }
+    }
 
     override fun script(): Nothing {
+        // AI battle data capture: observe only, never decide. Installed
+        // here (not in the battle engine) so farming is never affected.
+        if (prefs.story.aiObservationLog) {
+            battle.battleObserver = observationLogger
+        }
+
         try {
             loop()
         } catch (e: StoryExitException) {
@@ -203,13 +224,21 @@ class AutoStory @Inject constructor(
         } catch (_: ScriptAbortException) {
             throw withTrail(ExitReason.Abort)
         } catch (e: Exception) {
+            val observations = observationHistory()
+
             throw ExitException(
-                if (prefs.story.debugLog) {
-                    ExitReason.Unexpected(
-                        IllegalStateException(
-                            "DEBUG TRAIL:\n$trail\nERROR=${e.javaClass.simpleName}: ${e.message}"
-                        )
-                    )
+                if (prefs.story.debugLog || observations.isNotBlank()) {
+                    val body = buildString {
+                        if (prefs.story.debugLog) {
+                            append("DEBUG TRAIL:\n").append(trail).append('\n')
+                        }
+                        if (observations.isNotBlank()) {
+                            append("BATTLE OBSERVATIONS:\n").append(observations)
+                        }
+                        append("ERROR=").append(e.javaClass.simpleName).append(": ").append(e.message)
+                    }
+
+                    ExitReason.Unexpected(IllegalStateException(body))
                 } else {
                     ExitReason.Unexpected(e)
                 }

@@ -47,6 +47,7 @@ class PrefsCore @Inject constructor(
     val autoStoryStopOnError = maker.bool("auto_story_stop_on_error", true)
     val autoStoryActionIntervalMs = maker.int("auto_story_action_interval_ms", 500)
     val autoStoryDebugLog = maker.bool("auto_story_debug_log")
+    val autoStoryAiObservationLog = maker.bool("auto_story_ai_observation_log")
 
     val stopOnCEGet = maker.bool("stop_on_ce_get")
     val stopOnFirstClearRewards = maker.bool("stop_on_first_clear_rewards")

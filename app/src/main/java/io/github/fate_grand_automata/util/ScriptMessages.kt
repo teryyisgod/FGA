@@ -101,6 +101,10 @@ class ScriptMessages @Inject constructor(
             is ScriptLog.AutoStoryState -> {
                 Timber.d("AutoStory: state=${item.state}, completed=${item.completedQuests}")
             }
+
+            is ScriptLog.BattleObservation -> {
+                Timber.d("BattleObservation ${item.json}")
+            }
         }
 
     override fun notify(action: ScriptNotify) =

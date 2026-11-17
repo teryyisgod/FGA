@@ -35,4 +35,12 @@ interface IAutoStoryPreferences {
 
     /** Log every state transition (ScriptLog.AutoStoryState) for debugging. */
     val debugLog: Boolean
+
+    /**
+     * Capture a JSON snapshot of the battle state at every decision
+     * point (battle start + each turn, before cards are clicked) for a
+     * future external AI battle advisor. Observation only: it never
+     * changes any battle decision.
+     */
+    val aiObservationLog: Boolean
 }

@@ -544,6 +544,30 @@ class AutoStory @Inject constructor(
             return@useSameSnapIn true
         }
 
+        // Tap-to-continue announcements ("画面をタッチしてください"):
+        // skill changes, battle-style changes and similar full-screen
+        // notices. Two templates cover the dark and bright background
+        // variants of the same prompt — each scores 1.00 on its own
+        // variant and <=0.22 on unrelated screens. Checked here, on
+        // every pass and in any state: these notices also appear
+        // right after battles and story scenes, where the
+        // dismissNotices gate (last state UNKNOWN / QUEST_SELECT)
+        // never opens, so the run stalled on them (observed on
+        // device 2026-11-17: the Mash skill-change notice in
+        // Camelot, which the game shows twice in a row). The shared
+        // attempt cap still applies, so a false positive cannot tap
+        // forever.
+        if (noticeAttempts < MAX_NOTICE_ATTEMPTS) {
+            for (image in listOf(Images.NoticeTap, Images.NoticeTapBright)) {
+                locations.story.noticeTapRegion.find(images[image], NOTICE_SIMILARITY)?.let { match ->
+                    ++noticeAttempts
+                    trace("notice: tap-to-continue announcement, tapping")
+                    match.region.center.click()
+                    return@useSameSnapIn true
+                }
+            }
+        }
+
         when {
             // Quest-start confirmation ("クエストを開始しますか？"):
             // quests whose party is formed right before battle show

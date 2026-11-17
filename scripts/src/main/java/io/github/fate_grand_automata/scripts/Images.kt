@@ -24,6 +24,7 @@ enum class Images(val path: String) {
     StoryNextGold("story_next_gold.png"),
     StoryNextGoldBright("story_next_gold_bright.png"),
     NoticeTap("notice_tap.png"),
+    NoticeTapBright("notice_tap_bright.png"),
     LeylineStone("leyline_stone.png"),
     StoryStartQuest("story_start_quest.png"),
     StoryNextPanel("story_next_panel.png"),
